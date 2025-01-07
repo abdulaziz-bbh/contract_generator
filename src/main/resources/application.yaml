@@ -1,1 +1,11 @@
-spring.application.name=contract_generator
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/generator
+    driver-class-name: org.postgresql.Driver
+    username: postgres
+    password: 1234
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    database-platform: org.hibernate.dialect.PostgreSQLDialect

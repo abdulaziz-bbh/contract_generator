@@ -44,8 +44,9 @@ class Attachment(
 
 @Entity
 class Key(
-    @Column(nullable = false) val key: String,
-    @Column(nullable = false) val value: String
+    @Column(nullable = false) var key: String,
+    @Column(nullable = false) var value: String,
+    @Enumerated(EnumType.STRING) @Column(nullable = false) var language: KeyLanguage
 ) : BaseEntity()
 
 @Entity

@@ -7,10 +7,13 @@ import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.domain.Specification
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor
+import org.springframework.data.jpa.repository.Query
 import org.springframework.data.jpa.repository.support.JpaEntityInformation
 import org.springframework.data.jpa.repository.support.SimpleJpaRepository
 import org.springframework.data.repository.NoRepositoryBean
 import org.springframework.data.repository.findByIdOrNull
+import org.springframework.stereotype.Repository
+import java.util.*
 
 
 @NoRepositoryBean
@@ -52,4 +55,19 @@ class BaseRepositoryImpl<T : BaseEntity>(
     override fun saveAndRefresh(t: T): T {
         return save(t).apply { entityManager.refresh(this) }
     }
+}
+
+@Repository
+interface KeyRepository : BaseRepository<Key> {
+
+    fun findByKeyAndDeletedFalse(key: String): Key?
+
+    @Query("""
+        select k from Key k
+        where k.id != :id
+        and k.key = :key
+        and k.deleted = false 
+    """)
+    fun findByName(id: Long, name: String): Key?
+
 }

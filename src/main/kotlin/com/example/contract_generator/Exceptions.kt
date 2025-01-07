@@ -1,5 +1,6 @@
 package com.example.contract_generator
 
+import ch.qos.logback.core.spi.ErrorCodes
 import org.springframework.context.i18n.LocaleContextHolder
 import org.springframework.context.support.ResourceBundleMessageSource
 
@@ -18,5 +19,29 @@ sealed class GenericException() : RuntimeException() {
             e.message ?: "Unknown error"
         }
         return BaseMessage(errorCode().code, message)
+    }
+}
+
+class UserAlreadyExistsException : GenericException() {
+    override fun errorCode(): ErrorCode {
+        return ErrorCode.USER_ALREADY_EXISTS
+    }
+}
+
+class UserNotFoundException : GenericException() {
+    override fun errorCode(): ErrorCode {
+        return ErrorCode.USER_NOT_FOUND
+    }
+}
+
+class KeyAlreadyExistsException : GenericException() {
+    override fun errorCode(): ErrorCode {
+        return ErrorCode.KEY_ALREADY_EXISTS
+    }
+}
+
+class KeyNotFoundException : GenericException() {
+    override fun errorCode(): ErrorCode {
+        return ErrorCode.KEY_NOT_FOUND
     }
 }
