@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.support.JpaEntityInformation
 import org.springframework.data.jpa.repository.support.SimpleJpaRepository
 import org.springframework.data.repository.NoRepositoryBean
 import org.springframework.data.repository.findByIdOrNull
+import org.springframework.stereotype.Repository
 
 
 @NoRepositoryBean
@@ -52,4 +53,8 @@ class BaseRepositoryImpl<T : BaseEntity>(
     override fun saveAndRefresh(t: T): T {
         return save(t).apply { entityManager.refresh(this) }
     }
+
+
 }
+@Repository
+interface AttachmentRepository : BaseRepository<Attachment> {}
