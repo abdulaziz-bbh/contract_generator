@@ -14,6 +14,7 @@ import org.springframework.data.repository.NoRepositoryBean
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.data.repository.query.Param
 import java.util.*
+import org.springframework.stereotype.Repository
 
 
 @NoRepositoryBean
@@ -75,3 +76,9 @@ interface TokenRepository : BaseRepository<Token>{
 interface OrganizationRepository : BaseRepository<Organization>{
     fun existsByName(name: String): Boolean
 }
+
+
+
+}
+@Repository
+interface AttachmentRepository : BaseRepository<Attachment> {}

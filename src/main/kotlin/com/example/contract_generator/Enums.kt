@@ -12,7 +12,9 @@ enum class ErrorCode(val code: Int) {
     USER_NOT_FOUND(11),
     USERNAME_INVALID(12),
     ORGANIZATION_ALREADY_EXISTS(30),
-    ORGANIZATION_NOT_FOUND(31)
+    ORGANIZATION_NOT_FOUND(31),
+    ATTACHMENT_NOT_FOUND(40),
+    ATTACHMENT_ALREADY_EXISTS(41)
 }
 
 enum class Role(private var permissions: MutableSet<Permission>) {

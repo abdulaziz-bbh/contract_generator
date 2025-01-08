@@ -40,4 +40,11 @@ class UsernameInvalidException : GenericException() {
 }
 class UserNotFoundException: GenericException() {
     override fun errorCode(): ErrorCode = ErrorCode.USER_NOT_FOUND
+  
+class AttachmentNotFound():GenericException(){
+    override fun errorCode(): ErrorCode = ErrorCode.ATTACHMENT_NOT_FOUND
+}
+
+class AttachmentAlreadyExists():GenericException(){
+    override fun errorCode(): ErrorCode = ErrorCode.ATTACHMENT_ALREADY_EXISTS
 }
