@@ -14,7 +14,6 @@ import org.springframework.data.repository.NoRepositoryBean
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 import org.springframework.data.repository.query.Param
-import java.util.*
 
 
 @NoRepositoryBean
@@ -75,11 +74,6 @@ interface KeyRepository : BaseRepository<Key> {
 
 @Repository
 interface TemplateRepository : BaseRepository<Template> {
-
-}
-
-@Repository
-interface AttachmentRepository : BaseRepository<Attachment> {
 
 }
 

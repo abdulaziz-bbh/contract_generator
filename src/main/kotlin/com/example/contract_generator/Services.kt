@@ -20,10 +20,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.core.userdetails.UserDetails
 import org.springframework.security.core.userdetails.UserDetailsService
-import org.springframework.stereotype.Service
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.core.io.InputStreamResource
-import org.springframework.http.ResponseEntity
 import org.springframework.web.multipart.MultipartFile
 import java.io.FileInputStream
 import java.io.IOException
@@ -319,7 +316,10 @@ class AuthServiceImpl(
 
 
 @Service
-class AttachmentServiceImpl(private  val repository: AttachmentRepository) : AttachmentService {
+class AttachmentServiceImpl(
+    private  val repository: AttachmentRepository,
+    private val attachmentMapper: AttachmentMapper,
+    ) : AttachmentService {
     @Value("\${file.path}")
     lateinit var filePath: String
     override fun upload(multipartFile: MultipartFile): AttachmentInfo {
