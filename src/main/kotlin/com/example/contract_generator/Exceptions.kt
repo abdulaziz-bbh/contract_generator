@@ -16,7 +16,7 @@ sealed class GenericException() : RuntimeException() {
                 errorCode().name, getArguments(), LocaleContextHolder.getLocale()
             )
         } catch (e: Exception) {
-            e.message ?: "  error"
+            e.message ?: "error"
         }
         return BaseMessage(errorCode().code, message)
     }
@@ -43,6 +43,12 @@ class TemplateAlreadyExistsException : GenericException() {
 class TemplateNotFoundException : GenericException() {
     override fun errorCode(): ErrorCode {
         return ErrorCode.TEMPLATE_NOT_FOUND
+    }
+}
+
+class InvalidTemplateNameException : GenericException() {
+    override fun errorCode(): ErrorCode {
+        return ErrorCode.INVALID_TEMPLATE_NAME
     }
 }
 

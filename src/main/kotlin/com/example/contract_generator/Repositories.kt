@@ -78,11 +78,6 @@ interface TemplateRepository : BaseRepository<Template> {
 
 }
 
-@Repository
-interface AttachmentRepository : BaseRepository<Attachment> {
-
-}
-
 interface UserRepository : BaseRepository<User>{
 
     fun existsByPnflOrPassportIdOrPhoneNumber(pnfl: String, passportId:String, phoneNumber: String): Boolean

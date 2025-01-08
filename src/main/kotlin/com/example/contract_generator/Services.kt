@@ -20,10 +20,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.core.userdetails.UserDetails
 import org.springframework.security.core.userdetails.UserDetailsService
-import org.springframework.stereotype.Service
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.core.io.InputStreamResource
-import org.springframework.http.ResponseEntity
 import org.springframework.web.multipart.MultipartFile
 import java.io.FileInputStream
 import java.io.IOException
@@ -148,7 +145,7 @@ class TemplateServiceImpl(
         val attachment = attachmentService.findById(attachmentInfo.id)
 
         val templateName = multipartFile.originalFilename?.substringBeforeLast(".")
-            ?: throw IllegalArgumentException("Fayl nomini olishda xatolik yuz berdi")
+            ?: throw InvalidTemplateNameException()
 
         val extractedKeys = extractKeysFromFile(attachmentInfo)
 
@@ -321,9 +318,10 @@ class AuthServiceImpl(
 
 
 @Service
-class AttachmentServiceImpl(private  val repository: AttachmentRepository) : AttachmentService {
-    @Value("\${file.path}")
-    lateinit var filePath: String
+class AttachmentServiceImpl(
+    private val attachmentMapper: AttachmentMapper,
+    private  val repository: AttachmentRepository) : AttachmentService {
+
     override fun upload(multipartFile: MultipartFile): AttachmentInfo {
         val entity = attachmentMapper.toEntity(multipartFile)
         val file = File(entity.path).apply {
