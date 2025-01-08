@@ -6,6 +6,8 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority
 enum class ContractStatus {
     STARTED, PENDING, COMPLETED
 }
+
+
 enum class ErrorCode(val code: Int) {
     TOKEN_NOT_FOUND(0),
     USER_ALREADY_EXISTS(10),
@@ -15,6 +17,12 @@ enum class ErrorCode(val code: Int) {
     ORGANIZATION_NOT_FOUND(31),
     ATTACHMENT_NOT_FOUND(40),
     ATTACHMENT_ALREADY_EXISTS(41)
+    KEY_NOT_FOUND(50),
+    KEY_ALREADY_EXISTS(51),
+    TEMPLATE_NOT_FOUND(60),
+    TEMPLATE_ALREADY_EXISTS(61),
+
+
 }
 
 enum class Role(private var permissions: MutableSet<Permission>) {

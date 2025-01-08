@@ -12,9 +12,9 @@ import org.springframework.data.jpa.repository.support.JpaEntityInformation
 import org.springframework.data.jpa.repository.support.SimpleJpaRepository
 import org.springframework.data.repository.NoRepositoryBean
 import org.springframework.data.repository.findByIdOrNull
+import org.springframework.stereotype.Repository
 import org.springframework.data.repository.query.Param
 import java.util.*
-import org.springframework.stereotype.Repository
 
 
 @NoRepositoryBean
@@ -57,6 +57,32 @@ class BaseRepositoryImpl<T : BaseEntity>(
         return save(t).apply { entityManager.refresh(this) }
     }
 }
+
+@Repository
+interface KeyRepository : BaseRepository<Key> {
+
+    fun findByKeyAndDeletedFalse(key: String): Key?
+
+    @Query("""
+        select k from Key k
+        where k.id != :id
+        and k.key = :key
+        and k.deleted = false 
+    """)
+    fun findByName(id: Long, name: String): Key?
+
+}
+
+@Repository
+interface TemplateRepository : BaseRepository<Template> {
+
+}
+
+@Repository
+interface AttachmentRepository : BaseRepository<Attachment> {
+
+}
+
 interface UserRepository : BaseRepository<User>{
 
     fun existsByPnflOrPassportIdOrPhoneNumber(pnfl: String, passportId:String, phoneNumber: String): Boolean
