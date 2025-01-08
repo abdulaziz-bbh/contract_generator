@@ -21,6 +21,13 @@ sealed class GenericException() : RuntimeException() {
         return BaseMessage(errorCode().code, message)
     }
 }
+class AttachmentNotFound():GenericException(){
+    override fun errorCode(): ErrorCode = ErrorCode.ATTACHMENT_NOT_FOUND
+}
+
+class AttachmentAlreadyExists():GenericException(){
+    override fun errorCode(): ErrorCode = ErrorCode.ATTACHMENT_ALREADY_EXISTS
+}
 
 class UserAlreadyExistsException : GenericException() {
     override fun errorCode(): ErrorCode {

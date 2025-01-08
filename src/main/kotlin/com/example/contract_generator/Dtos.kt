@@ -8,6 +8,19 @@ import jakarta.persistence.OneToOne
 
 data class BaseMessage(val code: Int, val message: String?)
 
+
+data class AttachmentInfo(
+    val id: Long,
+    val name: String,
+    val contentType: String,
+    val size: Long,
+    val extension: String,
+    val path: String
+){
+    companion object {
+
+    }
+}
 data class KeyCreateRequest(
     val key: String,
 )

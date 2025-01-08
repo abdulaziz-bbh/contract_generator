@@ -25,7 +25,7 @@ class User(
     @Column(nullable = false) val pnfl: String,
     @Column(nullable = false) val passportId: String,
     @ManyToOne val organization: Organization,
-    @Enumerated(EnumType.STRING) @Column(nullable = false) val role: Role
+//    @Enumerated(EnumType.STRING) @Column(nullable = false) val role: Role
 ) : BaseEntity()
 
 @Entity

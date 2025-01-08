@@ -13,6 +13,7 @@ import org.springframework.data.jpa.repository.support.SimpleJpaRepository
 import org.springframework.data.repository.NoRepositoryBean
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
+import org.springframework.stereotype.Repository
 import java.util.*
 
 
@@ -56,6 +57,8 @@ class BaseRepositoryImpl<T : BaseEntity>(
         return save(t).apply { entityManager.refresh(this) }
     }
 }
+@Repository
+interface AttachmentRepository : BaseRepository<Attachment> {}
 
 @Repository
 interface KeyRepository : BaseRepository<Key> {
