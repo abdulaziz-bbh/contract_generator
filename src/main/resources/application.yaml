@@ -1,13 +1,12 @@
-
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/democloud
+    url: jdbc:postgresql://localhost:5432/contract_generator
     username: postgres
-    password: 1234
+    password: postgres
   jpa:
     hibernate:
-      ddl-auto: create
-      show-sql: true
+      ddl-auto: update
+    show-sql: true
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
@@ -19,3 +18,10 @@ spring:
       max-request-size: 15MB
 file:
   path: "./contract_generator/file"
+
+security:
+  jwt:
+    secret-key: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+    expiration: 86400000  # bir kun
+    refresh-token:
+        expiration: 604800000  # 7 kun

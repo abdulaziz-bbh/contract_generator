@@ -7,10 +7,13 @@ import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.domain.Specification
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor
+import org.springframework.data.jpa.repository.Query
 import org.springframework.data.jpa.repository.support.JpaEntityInformation
 import org.springframework.data.jpa.repository.support.SimpleJpaRepository
 import org.springframework.data.repository.NoRepositoryBean
 import org.springframework.data.repository.findByIdOrNull
+import org.springframework.data.repository.query.Param
+import java.util.*
 import org.springframework.stereotype.Repository
 
 
@@ -53,6 +56,27 @@ class BaseRepositoryImpl<T : BaseEntity>(
     override fun saveAndRefresh(t: T): T {
         return save(t).apply { entityManager.refresh(this) }
     }
+}
+interface UserRepository : BaseRepository<User>{
+
+    fun existsByPnflOrPassportIdOrPhoneNumber(pnfl: String, passportId:String, phoneNumber: String): Boolean
+
+    fun findByPhoneNumber(phoneNumber: String): User?
+
+}
+interface TokenRepository : BaseRepository<Token>{
+
+    @Query("select t from Token t inner join users u " +
+            "on t.user.id = u.id where u.id = :id and (t.expired = false or t.revoked = false )")
+    fun findAllValidTokenByUser(@Param("id") id: Long): List<Token>
+
+    fun findByToken(token: String): Token?
+}
+
+interface OrganizationRepository : BaseRepository<Organization>{
+    fun existsByName(name: String): Boolean
+}
+
 
 
 }

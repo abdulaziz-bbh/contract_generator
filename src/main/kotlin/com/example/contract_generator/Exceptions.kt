@@ -20,6 +20,27 @@ sealed class GenericException() : RuntimeException() {
         return BaseMessage(errorCode().code, message)
     }
 }
+
+class TokenNotFoundException: GenericException() {
+    override fun errorCode(): ErrorCode = ErrorCode.TOKEN_NOT_FOUND
+}
+
+class OrganizationAlreadyExistsException: GenericException() {
+    override fun errorCode(): ErrorCode = ErrorCode.ORGANIZATION_ALREADY_EXISTS
+}
+
+class OrganizationNotFoundException: GenericException() {
+    override fun errorCode(): ErrorCode = ErrorCode.ORGANIZATION_NOT_FOUND
+}
+class UserAlreadyExistsException: GenericException() {
+    override fun errorCode(): ErrorCode = ErrorCode.USER_ALREADY_EXISTS
+}
+class UsernameInvalidException : GenericException() {
+    override fun errorCode(): ErrorCode = ErrorCode.USERNAME_INVALID
+}
+class UserNotFoundException: GenericException() {
+    override fun errorCode(): ErrorCode = ErrorCode.USER_NOT_FOUND
+  
 class AttachmentNotFound():GenericException(){
     override fun errorCode(): ErrorCode = ErrorCode.ATTACHMENT_NOT_FOUND
 }
