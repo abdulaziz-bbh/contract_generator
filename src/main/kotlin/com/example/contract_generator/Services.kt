@@ -319,9 +319,12 @@ class AuthServiceImpl(
 
 @Service
 class AttachmentServiceImpl(
+    private  val repository: AttachmentRepository,
     private val attachmentMapper: AttachmentMapper,
-    private  val repository: AttachmentRepository) : AttachmentService {
-
+    ) : AttachmentService {
+    @Value("\${file.path}")
+    lateinit var filePath: String
+  
     override fun upload(multipartFile: MultipartFile): AttachmentInfo {
         val entity = attachmentMapper.toEntity(multipartFile)
         val file = File(entity.path).apply {
