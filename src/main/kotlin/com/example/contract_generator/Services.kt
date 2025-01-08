@@ -29,7 +29,7 @@ interface TemplateService {
     fun getAll(page: Int, size: Int): Page<TemplateResponse>
     fun getAll(): List<TemplateResponse>
     fun getOne(id: Long): TemplateResponse
-    fun create(request: TemplateCreateRequest, multipartFile: MultipartFile)
+    fun create(multipartFile: MultipartFile)
     fun delete(id: Long)
 }
 
@@ -114,10 +114,12 @@ class TemplateServiceImpl(
         } ?: throw KeyNotFoundException()
     }
 
-    override fun create(request: TemplateCreateRequest, multipartFile: MultipartFile) {
-        // 1. Faylni yuklash
+    override fun create(multipartFile: MultipartFile) {
         val attachmentInfo = attachmentService.upload(multipartFile)
         val attachment = attachmentService.findById(attachmentInfo.id)
+
+        val templateName = multipartFile.originalFilename?.substringBeforeLast(".")
+            ?: throw IllegalArgumentException("Fayl nomini olishda xatolik yuz berdi")
 
         val extractedKeys = extractKeysFromFile(attachmentInfo)
 
@@ -131,7 +133,7 @@ class TemplateServiceImpl(
                 keyRepository.findByKeyAndDeletedFalse(keyString) ?: throw KeyAlreadyExistsException()
             }
         }
-        val template = templateMapper.toEntity(request,attachment,keyEntities)
+        val template = templateMapper.toEntity(templateName,attachment,keyEntities)
         templateRepository.save(template)
     }
 

@@ -7,10 +7,6 @@ enum class Role {
 enum class ContractStatus {
     STARTED, PENDING, COMPLETED
 }
-
-enum class KeyLanguage {
-    LATIN,KRILL
-}
 enum class ErrorCode(val code: Int) {
 
     USER_NOT_FOUND(100),

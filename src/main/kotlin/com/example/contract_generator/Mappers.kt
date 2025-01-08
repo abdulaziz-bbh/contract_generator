@@ -65,14 +65,12 @@ class TemplateMapper {
         )
     }
 
-    fun toEntity(createRequest: TemplateCreateRequest, file: Attachment, keys: List<Key>): Template {
-        return createRequest.run {
-            Template(
+    fun toEntity(templateName: String, file: Attachment, keys: List<Key>): Template {
+        return Template(
                 templateName = templateName,
                 file = file,
                 keys = keys.toMutableList()
             )
-        }
     }
 }
 

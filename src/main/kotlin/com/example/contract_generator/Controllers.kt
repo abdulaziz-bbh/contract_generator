@@ -70,8 +70,7 @@ class TemplateController(val service: TemplateService) {
 
     @PostMapping(consumes = ["multipart/form-data"])
     fun create(
-        @RequestParam("file") multipartFile: MultipartFile,
-        @RequestParam @Valid request: TemplateCreateRequest) = service.create(request,multipartFile)
+        @RequestParam("file") multipartFile: MultipartFile) = service.create(multipartFile)
 
 
     @DeleteMapping("{id}")
