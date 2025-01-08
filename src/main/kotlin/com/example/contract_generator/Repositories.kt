@@ -77,8 +77,4 @@ interface OrganizationRepository : BaseRepository<Organization>{
     fun existsByName(name: String): Boolean
 }
 
-
-
-}
-@Repository
 interface AttachmentRepository : BaseRepository<Attachment> {}

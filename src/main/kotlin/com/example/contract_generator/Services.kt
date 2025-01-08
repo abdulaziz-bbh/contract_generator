@@ -14,12 +14,9 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.core.io.InputStreamResource
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
-import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
-import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
-import java.time.LocalDate
 import java.util.*
 
 
@@ -177,21 +174,10 @@ interface AttachmentService {
 class AttachmentServiceImpl(private  val repository: AttachmentRepository) : AttachmentService {
     @Value("\${file.path}")
     lateinit var filePath: String
-
     override fun upload(multipartFile: MultipartFile): AttachmentInfo {
-        val entity = toEntity(multipartFile)
-        val file = File(entity.path).apply {
-            parentFile.mkdirs()
-        }.absoluteFile
-
-        try {
-            multipartFile.transferTo(file)
-        } catch (e: IOException) {
-            throw RuntimeException(e)
-        }
-
-        return toInfo(repository.save(entity))
+        TODO("Not yet implemented")
     }
+
 
     @Throws(IOException::class)
     override fun download(id: Long): ResponseEntity<*> {
