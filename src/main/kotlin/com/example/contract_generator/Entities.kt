@@ -58,9 +58,9 @@ class Template(
 @Entity
 class Contract(
     @OneToOne val file: Attachment,
-    @ManyToMany val operators : List<User>,
     @ManyToOne val client: Client,
-    @Enumerated(EnumType.STRING) @Column(nullable = false) val status: ContractStatus
+    @ManyToMany val operators : MutableList<User> = mutableListOf(),
+    @Enumerated(EnumType.STRING) @Column(nullable = false) val status: ContractStatus=ContractStatus.STARTED
 
 ) : BaseEntity()
 

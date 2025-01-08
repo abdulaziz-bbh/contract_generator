@@ -58,3 +58,9 @@ class BaseRepositoryImpl<T : BaseEntity>(
 }
 @Repository
 interface AttachmentRepository : BaseRepository<Attachment> {}
+
+@Repository
+interface ClientRepository : BaseRepository<Client> {}
+
+@Repository
+interface ContractRepository : BaseRepository<Contract> {}

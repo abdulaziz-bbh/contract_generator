@@ -12,7 +12,7 @@ class AttachmentController(private val attachmentService: AttachmentService) {
 
 
     @PostMapping("/upload", consumes = ["multipart/form-data"])
-    fun uploadFile(@RequestParam("file") file: MultipartFile): AttachmentInfo {
+    fun uploadFile(@RequestParam("file") file: MultipartFile): Attachment {
         return attachmentService.upload(file)
     }
 
