@@ -45,15 +45,13 @@ class Attachment(
 @Entity
 class Key(
     @Column(nullable = false) var key: String,
-    @Column(nullable = false) var value: String,
-    @Enumerated(EnumType.STRING) @Column(nullable = false) var language: KeyLanguage
 ) : BaseEntity()
 
 @Entity
 class Template(
-    @Column(nullable = false) val templateName: String,
-    @OneToOne val file : Attachment,
-    @ManyToMany val keys : List<Key>,
+    @Column(nullable = false) var templateName: String,
+    @OneToOne var file : Attachment,
+    @ManyToMany var keys : MutableList<Key> = mutableListOf(),
 ) : BaseEntity()
 
 @Entity

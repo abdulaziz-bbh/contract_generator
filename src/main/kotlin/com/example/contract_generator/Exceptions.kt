@@ -45,3 +45,23 @@ class KeyNotFoundException : GenericException() {
         return ErrorCode.KEY_NOT_FOUND
     }
 }
+
+class TemplateAlreadyExistsException : GenericException() {
+    override fun errorCode(): ErrorCode {
+        return ErrorCode.TEMPLATE_ALREADY_EXISTS
+    }
+}
+
+class TemplateNotFoundException : GenericException() {
+    override fun errorCode(): ErrorCode {
+        return ErrorCode.TEMPLATE_NOT_FOUND
+    }
+}
+
+class AttachmentNotFound():GenericException(){
+    override fun errorCode(): ErrorCode = ErrorCode.ATTACHMENT_NOT_FOUND
+}
+
+class AttachmentAlreadyExists():GenericException(){
+    override fun errorCode(): ErrorCode = ErrorCode.ATTACHMENT_ALREADY_EXISTS
+}

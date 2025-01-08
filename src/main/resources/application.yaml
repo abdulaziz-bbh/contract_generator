@@ -7,5 +7,13 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: create
     database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+    servlet:
+      multipart:
+        enabled: true
+        max-file-size: 15MB
+        max-request-size: 15MB
+file:
+  path: "./contract_generator/file"

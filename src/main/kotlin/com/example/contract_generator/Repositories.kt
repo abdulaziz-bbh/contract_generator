@@ -71,3 +71,13 @@ interface KeyRepository : BaseRepository<Key> {
     fun findByName(id: Long, name: String): Key?
 
 }
+
+@Repository
+interface TemplateRepository : BaseRepository<Template> {
+
+}
+
+@Repository
+interface AttachmentRepository : BaseRepository<Attachment> {
+
+}
