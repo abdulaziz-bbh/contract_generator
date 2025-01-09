@@ -6,9 +6,13 @@ import org.springframework.data.annotation.CreatedBy
 import org.springframework.data.annotation.CreatedDate
 import org.springframework.data.annotation.LastModifiedBy
 import org.springframework.data.annotation.LastModifiedDate
+import org.springframework.data.jpa.domain.support.AuditingEntityListener
+import org.springframework.security.core.authority.SimpleGrantedAuthority
+import org.springframework.security.core.userdetails.UserDetails
 import java.util.*
 
 @MappedSuperclass
+@EntityListeners(AuditingEntityListener::class)
 abstract class BaseEntity(
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) var id: Long? = null,
     @CreatedDate @Temporal(TemporalType.TIMESTAMP) var createdAt: Date? = null,
@@ -22,15 +26,34 @@ abstract class BaseEntity(
 class User(
     @Column(nullable = false) var fullName: String,
     @Column(nullable = false) var phoneNumber: String,
-    @Column(nullable = false) val pnfl: String,
     @Column(nullable = false) val passportId: String,
-    @ManyToOne val organization: Organization,
-//    @Enumerated(EnumType.STRING) @Column(nullable = false) val role: Role
-) : BaseEntity()
+    @Column(nullable = false) var passWord: String,
+    @ManyToMany val organization: MutableList<Organization>? = null,
+    @Enumerated(EnumType.STRING) @Column(nullable = false) val role: Role
+) : BaseEntity(), UserDetails {
+
+    override fun getAuthorities(): List<SimpleGrantedAuthority> = role.getAuthority()
+    override fun getPassword(): String = passWord
+    override fun getUsername(): String = phoneNumber
+    override fun isAccountNonExpired(): Boolean = true
+    override fun isAccountNonLocked(): Boolean = true
+    override fun isCredentialsNonExpired(): Boolean = true
+    override fun isEnabled(): Boolean = true
+
+}
+@Entity
+class Token(
+    @Column(nullable = false) var token: String,
+    @Column(nullable = false) var tokenType: String,
+    @Column(nullable = false) var revoked: Boolean,
+    @Column(nullable = false) var expired: Boolean,
+    @ManyToOne(fetch = FetchType.LAZY) var user: User
+): BaseEntity()
 
 @Entity
 class Organization(
     @Column(nullable = false) var name: String,
+    @Column(nullable = false) var address: String
 ) : BaseEntity()
 
 @Entity
@@ -51,21 +74,22 @@ class Key(
 class Template(
     @Column(nullable = false) var templateName: String,
     @OneToOne var file : Attachment,
+    @ManyToOne var organization: Organization? = null,
     @ManyToMany var keys : MutableList<Key> = mutableListOf(),
 ) : BaseEntity()
 
 @Entity
 class Contract(
     @OneToOne val file: Attachment,
+    @ManyToOne val template: Template,
     @ManyToMany val operators : List<User>,
-    @ManyToOne val client: Client,
     @Enumerated(EnumType.STRING) @Column(nullable = false) val status: ContractStatus
 
 ) : BaseEntity()
 
 @Entity
-class Client(
-    @Column(nullable = false) val fullName: String,
-    @Column(nullable = false) val pnfl: String,
-    @Column(nullable = false) val passportId: String,
+class ContractData(
+    @Column(nullable = false) val key: String,
+    @Column(nullable = false) val value: String,
+    @ManyToOne val contract: Contract,
 ) : BaseEntity()

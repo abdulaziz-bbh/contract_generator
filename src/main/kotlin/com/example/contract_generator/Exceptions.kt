@@ -16,28 +16,9 @@ sealed class GenericException() : RuntimeException() {
                 errorCode().name, getArguments(), LocaleContextHolder.getLocale()
             )
         } catch (e: Exception) {
-            e.message ?: "Unknown error"
+            e.message ?: "error"
         }
         return BaseMessage(errorCode().code, message)
-    }
-}
-class AttachmentNotFound():GenericException(){
-    override fun errorCode(): ErrorCode = ErrorCode.ATTACHMENT_NOT_FOUND
-}
-
-class AttachmentAlreadyExists():GenericException(){
-    override fun errorCode(): ErrorCode = ErrorCode.ATTACHMENT_ALREADY_EXISTS
-}
-
-class UserAlreadyExistsException : GenericException() {
-    override fun errorCode(): ErrorCode {
-        return ErrorCode.USER_ALREADY_EXISTS
-    }
-}
-
-class UserNotFoundException : GenericException() {
-    override fun errorCode(): ErrorCode {
-        return ErrorCode.USER_NOT_FOUND
     }
 }
 
@@ -63,6 +44,33 @@ class TemplateNotFoundException : GenericException() {
     override fun errorCode(): ErrorCode {
         return ErrorCode.TEMPLATE_NOT_FOUND
     }
+}
+
+class InvalidTemplateNameException : GenericException() {
+    override fun errorCode(): ErrorCode {
+        return ErrorCode.INVALID_TEMPLATE_NAME
+    }
+}
+
+class TokenNotFoundException: GenericException() {
+    override fun errorCode(): ErrorCode = ErrorCode.TOKEN_NOT_FOUND
+}
+
+class OrganizationAlreadyExistsException: GenericException() {
+    override fun errorCode(): ErrorCode = ErrorCode.ORGANIZATION_ALREADY_EXISTS
+}
+
+class OrganizationNotFoundException: GenericException() {
+    override fun errorCode(): ErrorCode = ErrorCode.ORGANIZATION_NOT_FOUND
+}
+class UserAlreadyExistsException: GenericException() {
+    override fun errorCode(): ErrorCode = ErrorCode.USER_ALREADY_EXISTS
+}
+class UsernameInvalidException : GenericException() {
+    override fun errorCode(): ErrorCode = ErrorCode.USERNAME_INVALID
+}
+class UserNotFoundException: GenericException() {
+    override fun errorCode(): ErrorCode = ErrorCode.USER_NOT_FOUND
 }
 
 class AttachmentNotFound():GenericException(){

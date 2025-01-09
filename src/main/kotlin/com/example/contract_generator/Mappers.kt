@@ -1,10 +1,11 @@
 package com.example.contract_generator
 
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.stereotype.Component
 import org.springframework.web.multipart.MultipartFile
 import java.time.LocalDate
 import java.util.*
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
+import org.springframework.stereotype.Component
 
 @Component
 class KeyMapper {
@@ -65,14 +66,12 @@ class TemplateMapper {
         )
     }
 
-    fun toEntity(createRequest: TemplateCreateRequest, file: Attachment, keys: List<Key>): Template {
-        return createRequest.run {
-            Template(
+    fun toEntity(templateName: String, file: Attachment, keys: List<Key>): Template {
+        return Template(
                 templateName = templateName,
                 file = file,
-                keys = keys.toMutableList()
+                keys = keys.toMutableList(),
             )
-        }
     }
 }
 
@@ -107,5 +106,32 @@ class AttachmentMapper {
             path = path)
         }
     }
+}
 
+@Component
+class UserMapper(
+    private val organizationRepository: OrganizationRepository,
+    private val passwordEncoder: BCryptPasswordEncoder,
+) {
+    fun toEntity(request: CreateDirectorRequest): User {
+        return User(
+            fullName = request.fullName,
+            phoneNumber = request.phoneNumber,
+            passWord = passwordEncoder.encode(request.password),
+            passportId = request.passportId,
+            role = Role.OPERATOR
+        )
+    }
+    fun toEntity(request: CreateOperatorRequest): User {
+        return User(
+            fullName = request.fullName,
+            phoneNumber = request.phoneNumber,
+            passWord = passwordEncoder.encode(request.password),
+            passportId = request.passportId,
+            role = Role.DIRECTOR,
+            organization = mutableListOf(
+                organizationRepository.findByIdAndDeletedFalse(request.organizationId)
+                    ?: throw OrganizationNotFoundException())
+        )
+    }
 }

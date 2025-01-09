@@ -1,102 +1,5 @@
 package com.example.contract_generator
 
-import org.springframework.beans.factory.annotation.Value
-import org.springframework.core.io.InputStreamResource
-import org.springframework.http.MediaType
-import org.springframework.http.ResponseEntity
-import org.springframework.stereotype.Service
-import org.springframework.web.multipart.MultipartFile
-import java.io.File
-import java.io.FileInputStream
-import java.io.IOException
-import java.time.LocalDate
-import java.util.*
-
-interface AttachmentService {
-    fun upload(multipartFile: MultipartFile): AttachmentInfo
-    fun download(id: Long): ResponseEntity<*>
-    fun preview(id: Long): ResponseEntity<*>
-}
-
-@Service
-class AttachmentServiceImpl(private  val repository: AttachmentRepository) : AttachmentService {
-    @Value("\${file.path}")
-    lateinit var filePath: String
-
-    override fun upload(multipartFile: MultipartFile): AttachmentInfo {
-        val entity = toEntity(multipartFile)
-        val file = File(entity.path).apply {
-            parentFile.mkdirs()
-        }.absoluteFile
-
-        try {
-            multipartFile.transferTo(file)
-        } catch (e: IOException) {
-            throw RuntimeException(e)
-        }
-
-        return toInfo(repository.save(entity))
-    }
-
-    @Throws(IOException::class)
-    override fun download(id: Long): ResponseEntity<*> {
-        val fileEntity = repository.findByIdAndDeletedFalse(id)?:throw AttachmentNotFound()
-
-        return fileEntity.run{
-            val inputStream = FileInputStream(path)
-            val resource = InputStreamResource(inputStream)
-
-            ResponseEntity.ok()
-                .header("Content-Disposition", "attachment; filename=\"${name}\"")
-                .contentType(MediaType.parseMediaType(contentType))
-                .body(resource)
-        }
-    }
-    @Throws(IOException::class)
-    override fun preview(id: Long): ResponseEntity<*> {
-        val fileEntity = repository.findByIdAndDeletedFalse(id)?:throw AttachmentNotFound()
-
-        return fileEntity.run {
-            val inputStream = FileInputStream(path)
-            val resource = InputStreamResource(inputStream)
-
-            ResponseEntity.ok()
-                .header("Content-Disposition", "inline; filename=\"${name}\"")
-                .contentType(MediaType.parseMediaType(contentType))
-                .body(resource)
-        }
-    }
-
-    private fun toEntity(multipartFile: MultipartFile): Attachment {
-        val contentType = multipartFile.contentType ?: throw IllegalArgumentException("Content type is required")
-        val split = contentType.split("/")
-        val date = LocalDate.now()
-        val uuid = UUID.randomUUID()
-//        val filename = multipartFile.originalFilename
-        val extension = split.getOrElse(1) { "" }
-        val path = "$filePath/${date.year}/${date.monthValue}/${date.dayOfMonth}/${split[0]}/$uuid.$extension"
-        return Attachment(
-            name = uuid.toString(),
-            contentType = contentType,
-            size = multipartFile.size,
-            extension = extension,
-            path = path
-        )
-    }
-    private fun toInfo(attachment: Attachment): AttachmentInfo {
-        return attachment.run { AttachmentInfo(
-            id = id!!,
-            name = name,
-            contentType = contentType,
-            size = size,
-            extension = extension,
-            path = path
-        )
-        }
-    }
-
-
-}
 import jakarta.persistence.EntityManager
 import jakarta.transaction.Transactional
 import org.apache.poi.xwpf.usermodel.XWPFDocument
@@ -107,11 +10,36 @@ import org.springframework.data.domain.Pageable
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.stereotype.Service
-import org.springframework.web.multipart.MultipartFile
 import java.io.File
+import com.fasterxml.jackson.databind.ObjectMapper
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
+import org.springframework.http.HttpHeaders
+import org.springframework.security.authentication.AuthenticationManager
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
+import org.springframework.security.core.userdetails.UserDetails
+import org.springframework.security.core.userdetails.UserDetailsService
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.web.multipart.MultipartFile
 import java.io.FileInputStream
 import java.io.IOException
 import java.util.*
+
+
+interface UserService{
+    fun createOperator(request: CreateOperatorRequest)
+    fun existsUserData(passportId: String, phoneNumber: String)
+}
+interface AuthService{
+    fun registration(request: CreateDirectorRequest)
+    fun login(request: LoginRequest) : AuthenticationDto
+    fun refreshToken(request: HttpServletRequest, response: HttpServletResponse)
+}
+interface OrganizationService{
+    fun create(request: CreateOrganizationRequest)
+    fun update(request: UpdateOrganizationRequest)
+    fun existsByName(name: String)
+}
 
 interface KeyService {
     fun getAll(page: Int, size: Int): Page<KeyResponse>
@@ -126,7 +54,7 @@ interface TemplateService {
     fun getAll(page: Int, size: Int): Page<TemplateResponse>
     fun getAll(): List<TemplateResponse>
     fun getOne(id: Long): TemplateResponse
-    fun create(request: TemplateCreateRequest, multipartFile: MultipartFile)
+    fun create(multipartFile: MultipartFile)
     fun delete(id: Long)
 }
 
@@ -211,10 +139,12 @@ class TemplateServiceImpl(
         } ?: throw KeyNotFoundException()
     }
 
-    override fun create(request: TemplateCreateRequest, multipartFile: MultipartFile) {
-        // 1. Faylni yuklash
+    override fun create(multipartFile: MultipartFile) {
         val attachmentInfo = attachmentService.upload(multipartFile)
         val attachment = attachmentService.findById(attachmentInfo.id)
+
+        val templateName = multipartFile.originalFilename?.substringBeforeLast(".")
+            ?: throw InvalidTemplateNameException()
 
         val extractedKeys = extractKeysFromFile(attachmentInfo)
 
@@ -228,7 +158,7 @@ class TemplateServiceImpl(
                 keyRepository.findByKeyAndDeletedFalse(keyString) ?: throw KeyAlreadyExistsException()
             }
         }
-        val template = templateMapper.toEntity(request,attachment,keyEntities)
+        val template = templateMapper.toEntity(templateName,attachment,keyEntities)
         templateRepository.save(template)
     }
 
@@ -250,20 +180,149 @@ class TemplateServiceImpl(
         return keys
     }
 
-
-
     @Transactional
     override fun delete(id: Long) {
         templateRepository.trash(id) ?: throw TemplateNotFoundException()
+    }
+} 
+
+
+@Service
+class UserServiceImpl(
+    private val userRepository: UserRepository,
+    private val userMapper: UserMapper
+): UserService {
+
+    override fun createOperator(request: CreateOperatorRequest) {
+        existsUserData(request.passportId, request.phoneNumber)
+        userRepository.save(userMapper.toEntity(request))
+    }
+
+    override fun existsUserData(passportId: String, phoneNumber: String) {
+        if (userRepository.existsByPassportIdOrPhoneNumber(passportId, phoneNumber))
+            throw UserAlreadyExistsException()
+    }
+
+}
+
+@Service
+class OrganizationServiceImpl(
+    private val organizationRepository: OrganizationRepository
+): OrganizationService {
+    override fun create(request: CreateOrganizationRequest) {
+        existsByName(request.name)
+        val organization = Organization(
+            name = request.name,
+            address = request.address
+        )
+        organizationRepository.save(organization)
+    }
+
+    override fun update(request: UpdateOrganizationRequest) {
+        TODO("Not yet implemented")
+    }
+
+    override fun existsByName(name: String) {
+        name.let {
+            if(organizationRepository.existsByName(name))
+                throw OrganizationAlreadyExistsException()
+        }
+    }
+}
+
+@Service
+class CustomUserDetailsService(private val userRepository: UserRepository) : UserDetailsService {
+    override fun loadUserByUsername(username: String?): UserDetails {
+        if(username.isNullOrBlank() || username.isBlank())
+            throw UsernameInvalidException()
+        return userRepository.findByPhoneNumber(username) ?: throw UserNotFoundException()
+    }
+}
+@Service
+class AuthServiceImpl(
+    private val authenticationManager: AuthenticationManager,
+    private val userRepository: UserRepository,
+    private val tokenRepository: TokenRepository,
+    private val jwtProvider: JwtProvider,
+    private val userMapper: UserMapper
+) : AuthService {
+
+    override fun registration(request: CreateDirectorRequest) {
+        existsUserData(request.passportId, request.phoneNumber)
+        userRepository.save(userMapper.toEntity(request))
+    }
+
+    override fun login(request: LoginRequest): AuthenticationDto {
+        if (request.username.isBlank())
+            throw UsernameInvalidException()
+        authenticationManager.authenticate(
+            UsernamePasswordAuthenticationToken(request.username, request.password))
+        val user = userRepository.findByPhoneNumber(request.username) ?: throw UserNotFoundException()
+        val accessToken = jwtProvider.generateAccessToken(user)
+        val refreshToken = jwtProvider.generateRefreshToken(user)
+        saveToken(user, accessToken)
+        return AuthenticationDto(
+            accessToken = accessToken,
+            refreshToken = refreshToken
+        )
+    }
+
+    override fun refreshToken(request: HttpServletRequest, response: HttpServletResponse) {
+        val authHeader = request.getHeader(HttpHeaders.AUTHORIZATION)
+        if (authHeader == null || authHeader.startsWith("Bearer ")) return
+        val refreshToken  = authHeader.substring(7)
+        val username = jwtProvider.extractUsername(refreshToken)
+        username.let {
+            val user = userRepository.findByPhoneNumber(username) ?: throw UserNotFoundException()
+            if (jwtProvider.isTokenValid(refreshToken, user)){
+                val accessToken = jwtProvider.generateAccessToken(user)
+                revokeUserAllTokens(user)
+                saveToken(user, accessToken)
+                val dto = AuthenticationDto(
+                    accessToken = accessToken,
+                    refreshToken = refreshToken
+                )
+                ObjectMapper().writeValue(response.outputStream, dto)
+            }
+        }
+    }
+
+    private fun revokeUserAllTokens(user: User) {
+        val tokens = user.id?.let { tokenRepository.findAllValidTokenByUser(it) }
+        if (tokens.isNullOrEmpty()) return
+
+        tokens.forEach { token -> run {
+                token.revoked = true
+                token.expired = true
+            }
+        }
+        tokenRepository.saveAll(tokens)
+    }
+    private fun saveToken(user: User, jwt: String) {
+        val token = Token(
+            token = jwt,
+            user = user,
+            expired = false,
+            revoked = false,
+            tokenType = "Bearer"
+        )
+        tokenRepository.save(token)
+    }
+    private fun existsUserData(passportId: String, phoneNumber: String) {
+        if (userRepository.existsByPassportIdOrPhoneNumber(passportId, phoneNumber))
+            throw UserAlreadyExistsException()
     }
 }
 
 
 @Service
 class AttachmentServiceImpl(
-    private val repository: AttachmentRepository,
-    private val attachmentMapper: AttachmentMapper) : AttachmentService {
-
+    private  val repository: AttachmentRepository,
+    private val attachmentMapper: AttachmentMapper,
+    ) : AttachmentService {
+    @Value("\${file.path}")
+    lateinit var filePath: String
+  
     override fun upload(multipartFile: MultipartFile): AttachmentInfo {
         val entity = attachmentMapper.toEntity(multipartFile)
         val file = File(entity.path).apply {
@@ -276,6 +335,7 @@ class AttachmentServiceImpl(
         }
         return attachmentMapper.toInfo(repository.save(entity))
     }
+
 
     @Throws(IOException::class)
     override fun download(id: Long): ResponseEntity<*> {
@@ -313,3 +373,4 @@ class AttachmentServiceImpl(
         }else throw AttachmentNotFound()
     }
 }
+
