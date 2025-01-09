@@ -207,28 +207,29 @@ class TemplateServiceImpl(
         val existingTemplate = templateRepository.findByIdAndDeletedFalse(templateId)
             ?: throw TemplateNotFoundException()
 
-        val updatedAttachment = multipartFile.let {
-            attachmentService.upload(it)
-            existingTemplate.file.id?.let { it1 -> attachmentService.findById(it1) }
-        } ?: existingTemplate.file
+        val updatedAttachmentInfo = attachmentService.upload(multipartFile)
+        val updatedAttachment = attachmentService.findById(updatedAttachmentInfo.id)
 
         val updatedTemplateName = multipartFile.originalFilename?.substringBeforeLast(".")
             ?: existingTemplate.templateName
 
-        val extractedKeys = extractKeysFromFile(attachmentMapper.toInfo(updatedAttachment)) ?: emptyList()
+        val extractedKeys = extractKeysFromFile(updatedAttachmentInfo)
 
-        val updatedKeyEntities = extractedKeys.map { keyString ->
-            keyRepository.findByKeyAndDeletedFalse(keyString) ?: run {
-                val keyCreateRequest = KeyCreateRequest(key = keyString)
-                keyService.create(keyCreateRequest)
-                keyRepository.findByKeyAndDeletedFalse(keyString)
-                    ?: throw KeyAlreadyExistsException()
-            }
+        val existingKeys = keyRepository.findAllByKeyInAndDeletedFalse(extractedKeys)
+        val existingKeyStrings = existingKeys.map { it.key }.toSet()
+
+        val newKeys = extractedKeys.filter {  it !in existingKeyStrings }.map { keyString ->
+            val keyCreateRequest = KeyCreateRequest(key = keyString)
+            keyService.create(keyCreateRequest)
+            keyRepository.findByKeyAndDeletedFalse(keyString)
+                ?: throw RuntimeException("Kalit yaratishdan keyin topilmadi: $keyString")
         }
+        val allKeys = existingKeys + newKeys
+
         val updatedTemplate = existingTemplate.apply {
             this.templateName = updatedTemplateName
             this.file = updatedAttachment
-            this.keys = updatedKeyEntities.toMutableList()
+            this.keys = allKeys.toMutableList()
         }
         templateRepository.save(updatedTemplate)
     }

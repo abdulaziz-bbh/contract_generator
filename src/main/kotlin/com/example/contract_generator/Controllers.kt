@@ -82,7 +82,8 @@ class TemplateController(val service: TemplateService) {
 
     @PutMapping("{id}")
     fun update(@PathVariable id: Long,
-               @RequestParam("file") multipartFile: MultipartFile) = service.update(id, multipartFile)
+               @RequestParam("file") multipartFile: MultipartFile)
+    = service.update(id, multipartFile)
 
     @DeleteMapping("{id}")
     fun delete(@PathVariable id: Long) = service.delete(id)

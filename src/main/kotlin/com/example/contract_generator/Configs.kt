@@ -45,6 +45,7 @@ class SecurityConfig() {
                auth -> auth
                .requestMatchers(
                    "api/v1/auth/**",
+                   "api/templates/**",
                    "/v2/api-docs",
                    "/v3/api-docs",
                    "/v3/api-docs/**",
@@ -97,6 +98,6 @@ class AuthConfig(
 class AppConfiguration(): AuditorAware<Long>{
 
     override fun getCurrentAuditor(): Optional<Long> {
-        return Optional.ofNullable(getCurrentUser()?.id)
+        return Optional.ofNullable(1L)
     }
 }

@@ -12,9 +12,8 @@ import org.springframework.data.jpa.repository.support.JpaEntityInformation
 import org.springframework.data.jpa.repository.support.SimpleJpaRepository
 import org.springframework.data.repository.NoRepositoryBean
 import org.springframework.data.repository.findByIdOrNull
-import org.springframework.stereotype.Repository
 import org.springframework.data.repository.query.Param
-import java.util.*
+import org.springframework.stereotype.Repository
 
 
 @NoRepositoryBean
@@ -70,6 +69,9 @@ interface KeyRepository : BaseRepository<Key> {
         and k.deleted = false 
     """)
     fun findByName(id: Long, name: String): Key?
+
+    fun findAllByKeyInAndDeletedFalse(keys: Collection<String>): List<Key>
+
 
 }
 
