@@ -53,7 +53,14 @@ class KeyController(val service: KeyService) {
     @DeleteMapping("{id}")
     fun delete(@PathVariable id: Long) = service.delete(id)
 }
-
+@RestController
+@RequestMapping("/api/contracts")
+class ContractController(val service:ContractService) {
+    @PostMapping()
+    fun signup(@RequestBody @Valid request: ContractRequestDto): Contract {
+        return service.generateContract(request)
+    }
+}
 
 @RestController
 @RequestMapping("/api/templates")

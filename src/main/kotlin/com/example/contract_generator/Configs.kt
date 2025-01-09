@@ -44,6 +44,7 @@ class SecurityConfig() {
            .authorizeHttpRequests{
                auth -> auth
                .requestMatchers(
+
                    "api/v1/auth/**",
                    "api/templates/**",
                    "/v2/api-docs",
@@ -98,7 +99,6 @@ class AuthConfig(
 class AppConfiguration(): AuditorAware<Long>{
 
     override fun getCurrentAuditor(): Optional<Long> {
-
         return Optional.ofNullable(getCurrentUserId()?.id)
     }
 }

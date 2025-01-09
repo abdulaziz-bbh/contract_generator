@@ -75,6 +75,9 @@ interface KeyRepository : BaseRepository<Key> {
 
 }
 
+
+interface ContractRepository : BaseRepository<Contract> {}
+
 @Repository
 interface TemplateRepository : BaseRepository<Template> {
 
@@ -106,3 +109,5 @@ interface OrganizationRepository : BaseRepository<Organization>{
 }
 
 interface AttachmentRepository : BaseRepository<Attachment> {}
+
+interface ContractDataRepository : BaseRepository<ContractData>{}

@@ -96,4 +96,9 @@ data class AttachmentInfo(
     val extension: String,
     val path: String
 )
+
+data class ContractRequestDto(
+    val templateId: Long,
+    val keys: Map<String,String>
+)
     
