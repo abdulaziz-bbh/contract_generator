@@ -14,6 +14,7 @@ import org.springframework.data.repository.NoRepositoryBean
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 import org.springframework.data.repository.query.Param
+import java.util.*
 
 
 @NoRepositoryBean
@@ -75,6 +76,7 @@ interface KeyRepository : BaseRepository<Key> {
 @Repository
 interface TemplateRepository : BaseRepository<Template> {
 
+
 }
 
 interface UserRepository : BaseRepository<User>{
@@ -95,6 +97,9 @@ interface TokenRepository : BaseRepository<Token>{
 
 interface OrganizationRepository : BaseRepository<Organization>{
     fun existsByName(name: String): Boolean
+
+    @Query(value = "select * from Organization where id = :id", nativeQuery = true)
+    fun findByIdNative(@Param("id") id: Long): Organization?
 }
 
 interface AttachmentRepository : BaseRepository<Attachment> {}

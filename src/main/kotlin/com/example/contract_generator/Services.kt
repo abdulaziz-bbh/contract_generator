@@ -20,6 +20,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.userdetails.UserDetails
 import org.springframework.security.core.userdetails.UserDetailsService
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.multipart.MultipartFile
 import java.io.FileInputStream
 import java.io.IOException
@@ -54,7 +55,8 @@ interface TemplateService {
     fun getAll(page: Int, size: Int): Page<TemplateResponse>
     fun getAll(): List<TemplateResponse>
     fun getOne(id: Long): TemplateResponse
-    fun create(multipartFile: MultipartFile)
+    fun create(organizationId: Long, multipartFile: MultipartFile)
+    fun update(templateId: Long, multipartFile: MultipartFile)
     fun delete(id: Long)
 }
 
@@ -116,9 +118,11 @@ class TemplateServiceImpl(
     private val keyService: KeyService,
     private val keyRepository: KeyRepository,
     private val templateMapper: TemplateMapper,
+    private val attachmentMapper: AttachmentMapper,
     private val attachmentService: AttachmentService,
     private val templateRepository: TemplateRepository,
-    //private val attachment: AttachmentMapper
+    private val organizationRepository: OrganizationRepository,
+    userRepository: UserRepository
 ) : TemplateService {
 
     override fun getAll(page: Int, size: Int): Page<TemplateResponse> {
@@ -139,7 +143,11 @@ class TemplateServiceImpl(
         } ?: throw KeyNotFoundException()
     }
 
-    override fun create(multipartFile: MultipartFile) {
+    override fun create(organizationId: Long, multipartFile: MultipartFile) {
+        //val organizationId = getCurrentOrganizationId()
+        val organization = organizationRepository.findById(organizationId)
+            .orElseThrow { OrganizationNotFoundException() }
+
         val attachmentInfo = attachmentService.upload(multipartFile)
         val attachment = attachmentService.findById(attachmentInfo.id)
 
@@ -155,12 +163,26 @@ class TemplateServiceImpl(
             } else {
                 val keyCreateRequest = KeyCreateRequest(key = keyString)
                 keyService.create(keyCreateRequest)
-                keyRepository.findByKeyAndDeletedFalse(keyString) ?: throw KeyAlreadyExistsException()
+                keyRepository.findByKeyAndDeletedFalse(keyString)
+                    ?: throw KeyAlreadyExistsException()
             }
         }
-        val template = templateMapper.toEntity(templateName,attachment,keyEntities)
+        val template = templateMapper.toEntity(templateName,attachment,keyEntities,organization)
         templateRepository.save(template)
     }
+
+//    private fun getCurrentOrganizationId(): Long {
+//        val authentication = SecurityContextHolder.getContext().authentication
+//        if (authentication != null && authentication.isAuthenticated) {
+//            val principal = authentication.principal as? User
+//            val organizationId = principal?.organization?.firstOrNull()?.id
+//                ?: throw OrganizationNotFoundException()
+//            return organizationId
+//        } else {
+//            throw UnauthorizedException()
+//        }
+//    }
+
 
     private fun extractKeysFromFile(attachmentInfo: AttachmentInfo): List<String> {
         val regex = Regex("\\$([a-zA-Z0-9]+)\\$")
@@ -179,6 +201,38 @@ class TemplateServiceImpl(
         }
         return keys
     }
+
+
+    override fun update(templateId: Long, multipartFile: MultipartFile) {
+        val existingTemplate = templateRepository.findByIdAndDeletedFalse(templateId)
+            ?: throw TemplateNotFoundException()
+
+        val updatedAttachment = multipartFile.let {
+            attachmentService.upload(it)
+            existingTemplate.file.id?.let { it1 -> attachmentService.findById(it1) }
+        } ?: existingTemplate.file
+
+        val updatedTemplateName = multipartFile.originalFilename?.substringBeforeLast(".")
+            ?: existingTemplate.templateName
+
+        val extractedKeys = extractKeysFromFile(attachmentMapper.toInfo(updatedAttachment)) ?: emptyList()
+
+        val updatedKeyEntities = extractedKeys.map { keyString ->
+            keyRepository.findByKeyAndDeletedFalse(keyString) ?: run {
+                val keyCreateRequest = KeyCreateRequest(key = keyString)
+                keyService.create(keyCreateRequest)
+                keyRepository.findByKeyAndDeletedFalse(keyString)
+                    ?: throw KeyAlreadyExistsException()
+            }
+        }
+        val updatedTemplate = existingTemplate.apply {
+            this.templateName = updatedTemplateName
+            this.file = updatedAttachment
+            this.keys = updatedKeyEntities.toMutableList()
+        }
+        templateRepository.save(updatedTemplate)
+    }
+
 
     @Transactional
     override fun delete(id: Long) {
@@ -320,8 +374,6 @@ class AttachmentServiceImpl(
     private  val repository: AttachmentRepository,
     private val attachmentMapper: AttachmentMapper,
     ) : AttachmentService {
-    @Value("\${file.path}")
-    lateinit var filePath: String
   
     override fun upload(multipartFile: MultipartFile): AttachmentInfo {
         val entity = attachmentMapper.toEntity(multipartFile)
