@@ -273,7 +273,7 @@ class OrganizationServiceImpl(
             address = request.address
         )
         organization = organizationRepository.save(organization)
-        val director = userRepository.findById(getCurrentUserId()!!).getOrNull()
+        val director = getCurrentUserId()?.id?.let { userRepository.findById(it).getOrNull() }
         director?.organization?.add(organization)
         userRepository.save(director!!)
     }
