@@ -44,7 +44,6 @@ class SecurityConfig() {
            .authorizeHttpRequests{
                auth -> auth
                .requestMatchers(
-
                    "api/v1/auth/**",
                    "api/templates/**",
                    "/v2/api-docs",
