@@ -50,9 +50,16 @@ data class CreateOperatorRequest(
     @field:NotNull val fullName: String,
     @field:NotNull val password: String,
     @field:NotNull val phoneNumber: String,
-    @field:NotNull val pnfl: String,
     @field:NotNull val passportId: String,
     @field:NotNull val organizationId: Long
+)
+
+data class UserDto(
+    val id: Long?,
+    val fullName: String,
+    val role: Role,
+    val phoneNumber: String,
+    val passportId: String,
 )
 
 data class LoginRequest(

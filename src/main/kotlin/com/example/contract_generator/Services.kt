@@ -24,7 +24,7 @@ import org.springframework.web.multipart.MultipartFile
 import java.io.FileInputStream
 import java.io.IOException
 import java.util.*
-
+import kotlin.jvm.optionals.getOrNull
 
 interface UserService{
     fun createOperator(request: CreateOperatorRequest)
@@ -199,23 +199,28 @@ class UserServiceImpl(
     }
 
     override fun existsUserData(passportId: String, phoneNumber: String) {
-        if (userRepository.existsByPassportIdOrPhoneNumber(passportId, phoneNumber))
+        if (userRepository.existsByPassportId(passportId))
+            throw PassportIdAlreadyUsedException()
+        if (userRepository.existsByPhoneNumber(phoneNumber))
             throw UserAlreadyExistsException()
     }
-
 }
 
 @Service
 class OrganizationServiceImpl(
-    private val organizationRepository: OrganizationRepository
+    private val organizationRepository: OrganizationRepository,
+    private val userRepository: UserRepository
 ): OrganizationService {
     override fun create(request: CreateOrganizationRequest) {
         existsByName(request.name)
-        val organization = Organization(
+        var organization = Organization(
             name = request.name,
             address = request.address
         )
-        organizationRepository.save(organization)
+        organization = organizationRepository.save(organization)
+        val director = userRepository.findById(getCurrentUserId()!!).getOrNull()
+        director?.organization?.add(organization)
+        userRepository.save(director!!)
     }
 
     override fun update(request: UpdateOrganizationRequest) {
@@ -309,7 +314,9 @@ class AuthServiceImpl(
         tokenRepository.save(token)
     }
     private fun existsUserData(passportId: String, phoneNumber: String) {
-        if (userRepository.existsByPassportIdOrPhoneNumber(passportId, phoneNumber))
+        if (userRepository.existsByPassportId(passportId))
+            throw PassportIdAlreadyUsedException()
+        if (userRepository.existsByPhoneNumber(phoneNumber))
             throw UserAlreadyExistsException()
     }
 }
