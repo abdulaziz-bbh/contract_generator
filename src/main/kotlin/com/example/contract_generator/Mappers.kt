@@ -119,7 +119,7 @@ class UserMapper(
             phoneNumber = request.phoneNumber,
             passWord = passwordEncoder.encode(request.password),
             passportId = request.passportId,
-            role = Role.OPERATOR
+            role = Role.DIRECTOR
         )
     }
     fun toEntity(request: CreateOperatorRequest): User {
@@ -128,7 +128,7 @@ class UserMapper(
             phoneNumber = request.phoneNumber,
             passWord = passwordEncoder.encode(request.password),
             passportId = request.passportId,
-            role = Role.DIRECTOR,
+            role = Role.OPERATOR,
             organization = mutableListOf(
                 organizationRepository.findByIdAndDeletedFalse(request.organizationId)
                     ?: throw OrganizationNotFoundException())
