@@ -1,6 +1,5 @@
 package com.example.contract_generator
 
-import ch.qos.logback.core.spi.ErrorCodes
 import org.springframework.context.i18n.LocaleContextHolder
 import org.springframework.context.support.ResourceBundleMessageSource
 
@@ -71,6 +70,9 @@ class UsernameInvalidException : GenericException() {
 }
 class UserNotFoundException: GenericException() {
     override fun errorCode(): ErrorCode = ErrorCode.USER_NOT_FOUND
+}
+class PassportIdAlreadyUsedException: GenericException() {
+    override fun errorCode(): ErrorCode = ErrorCode.PASSPORT_ALREADY_USED
 }
 
 class AttachmentNotFound():GenericException(){

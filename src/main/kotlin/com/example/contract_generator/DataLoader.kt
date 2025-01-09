@@ -19,7 +19,7 @@ class DataLoader(
             passportId = "1234567890",
             role = Role.ADMIN
         )
-        if (!userRepository.existsByPassportIdOrPhoneNumber(admin.passportId, admin.phoneNumber)){
+        if (!userRepository.existsByPassportId(admin.passportId) && !userRepository.existsByPhoneNumber(admin.phoneNumber)){
             userRepository.save(admin)
         }
     }

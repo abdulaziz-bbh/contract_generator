@@ -74,7 +74,7 @@ class Key(
 class Template(
     @Column(nullable = false) var templateName: String,
     @OneToOne var file : Attachment,
-    @ManyToOne var organization: Organization? = null,
+    @ManyToOne var organization: Organization,
     @ManyToMany var keys : MutableList<Key> = mutableListOf(),
 ) : BaseEntity()
 

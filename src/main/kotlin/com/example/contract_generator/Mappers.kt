@@ -41,12 +41,15 @@ class KeyMapper {
 class TemplateMapper {
 
     fun toDto(template: Template): TemplateResponse {
-        return TemplateResponse(
+        return template.run {
+            TemplateResponse(
                 id = template.id,
                 templateName = template.templateName,
                 file = toAttachmentResponse(template.file),
-                keys = template.keys.map { toKeyResponse(it) }
+                keys = template.keys.map { toKeyResponse(it) },
+                organizationName = this.organization.name
             )
+        }
     }
 
     private fun toKeyResponse(key: Key): KeyResponse {
@@ -67,13 +70,23 @@ class TemplateMapper {
         )
     }
 
-    fun toEntity(templateName: String, file: Attachment, keys: List<Key>): Template {
-        return Template(
-                templateName = templateName,
-                file = file,
-                keys = keys.toMutableList(),
-            )
+    fun toEntity(templateName: String, file: Attachment, keys: List<Key>, organization: Organization): Template {
+        return  Template(
+            templateName = templateName,
+            file = file,
+            keys = keys.toMutableList(),
+            organization = organization
+        )
     }
+
+//    fun updateEntity(template: Template, updateRequest: TemplateUpdateRequest): Template {
+//        return updateRequest.run {
+//            template.apply {
+//                updateRequest.templateName.let { this.templateName = it }
+//                updateRequest.keys.let { this.keys = it }
+//            }
+//        }
+//    }
 }
 @Component
 class AttachmentMapper {
@@ -101,6 +114,17 @@ class AttachmentMapper {
             }
 
             return Triple(directory, uuid, fullPath)
+
+    fun toInfo(attachment: Attachment): AttachmentInfo {
+        return attachment.run {
+            AttachmentInfo(
+                id = id!!,
+                name = name,
+                contentType = contentType,
+                size = size,
+                extension = extension,
+                path = path
+            )
         }
 
         fun toEntity(multipartFile: MultipartFile): Attachment {
@@ -142,19 +166,21 @@ class UserMapper(
             phoneNumber = request.phoneNumber,
             passWord = passwordEncoder.encode(request.password),
             passportId = request.passportId,
-            role = Role.OPERATOR
+            role = Role.DIRECTOR
         )
     }
+
     fun toEntity(request: CreateOperatorRequest): User {
         return User(
             fullName = request.fullName,
             phoneNumber = request.phoneNumber,
             passWord = passwordEncoder.encode(request.password),
             passportId = request.passportId,
-            role = Role.DIRECTOR,
+            role = Role.OPERATOR,
             organization = mutableListOf(
                 organizationRepository.findByIdAndDeletedFalse(request.organizationId)
-                    ?: throw OrganizationNotFoundException())
+                    ?: throw OrganizationNotFoundException()
+            )
         )
     }
 }
