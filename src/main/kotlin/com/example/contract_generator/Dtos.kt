@@ -20,13 +20,20 @@ data class KeyUpdateRequest(
 
 data class TemplateCreateRequest(
     val templateName: String,
+    val organizationId: Long
 )
 
 data class TemplateResponse(
     val id: Long?,
     val templateName: String?,
     val file : AttachmentResponse?,
+    val organizationName: String?,
     val keys : List<KeyResponse>?
+)
+
+data class TemplateUpdateRequest(
+    val templateName: String,
+    val keys : List<KeyResponse>
 )
 
 data class AttachmentResponse(
@@ -50,9 +57,16 @@ data class CreateOperatorRequest(
     @field:NotNull val fullName: String,
     @field:NotNull val password: String,
     @field:NotNull val phoneNumber: String,
-    @field:NotNull val pnfl: String,
     @field:NotNull val passportId: String,
     @field:NotNull val organizationId: Long
+)
+
+data class UserDto(
+    val id: Long?,
+    val fullName: String,
+    val role: Role,
+    val phoneNumber: String,
+    val passportId: String,
 )
 
 data class LoginRequest(
@@ -81,5 +95,10 @@ data class AttachmentInfo(
     val size: Long,
     val extension: String,
     val path: String
+)
+
+data class ContractRequestDto(
+    val templateId: Long,
+    val keys: Map<String,String>
 )
     

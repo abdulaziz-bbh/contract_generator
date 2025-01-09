@@ -53,7 +53,14 @@ class KeyController(val service: KeyService) {
     @DeleteMapping("{id}")
     fun delete(@PathVariable id: Long) = service.delete(id)
 }
-
+@RestController
+@RequestMapping("/api/contracts")
+class ContractController(val service:ContractService) {
+    @PostMapping()
+    fun signup(@RequestBody @Valid request: ContractRequestDto): Contract {
+        return service.generateContract(request)
+    }
+}
 
 @RestController
 @RequestMapping("/api/templates")
@@ -76,8 +83,14 @@ class TemplateController(val service: TemplateService) {
 
     @PostMapping(consumes = ["multipart/form-data"])
     fun create(
-        @RequestParam("file") multipartFile: MultipartFile) = service.create(multipartFile)
+        @RequestParam organizationId: Long,
+        @RequestParam("file") multipartFile: MultipartFile) = service.create(organizationId,multipartFile)
 
+
+    @PutMapping("{id}")
+    fun update(@PathVariable id: Long,
+               @RequestParam("file") multipartFile: MultipartFile)
+    = service.update(id, multipartFile)
 
     @DeleteMapping("{id}")
     fun delete(@PathVariable id: Long) = service.delete(id)

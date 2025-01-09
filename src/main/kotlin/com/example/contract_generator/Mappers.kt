@@ -6,6 +6,7 @@ import java.time.LocalDate
 import java.util.*
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import org.springframework.stereotype.Component
+import java.io.File
 
 @Component
 class KeyMapper {
@@ -40,12 +41,15 @@ class KeyMapper {
 class TemplateMapper {
 
     fun toDto(template: Template): TemplateResponse {
-        return TemplateResponse(
+        return template.run {
+            TemplateResponse(
                 id = template.id,
                 templateName = template.templateName,
                 file = toAttachmentResponse(template.file),
-                keys = template.keys.map { toKeyResponse(it) }
+                keys = template.keys.map { toKeyResponse(it) },
+                organizationName = this.organization.name
             )
+        }
     }
 
     private fun toKeyResponse(key: Key): KeyResponse {
@@ -66,46 +70,89 @@ class TemplateMapper {
         )
     }
 
-    fun toEntity(templateName: String, file: Attachment, keys: List<Key>): Template {
-        return Template(
-                templateName = templateName,
-                file = file,
-                keys = keys.toMutableList(),
-            )
-    }
-}
-
-@Component
-class AttachmentMapper {
-    @Value("\${file.path}")
-    lateinit var filePath: String
-
-    fun toEntity(multipartFile: MultipartFile): Attachment {
-        val contentType = multipartFile.contentType ?: throw IllegalArgumentException("Content type is required")
-        val split = contentType.split("/")
-        val date = LocalDate.now()
-        val uuid = UUID.randomUUID()
-        val extension = split.getOrElse(1) { "" }
-        val path = "$filePath/${date.year}/${date.monthValue}/${date.dayOfMonth}/${split[0]}/$uuid.$extension"
-        return Attachment(
-            name = uuid.toString(),
-            contentType = contentType,
-            size = multipartFile.size,
-            extension = extension,
-            path = path
+    fun toEntity(templateName: String, file: Attachment, keys: List<Key>, organization: Organization): Template {
+        return  Template(
+            templateName = templateName,
+            file = file,
+            keys = keys.toMutableList(),
+            organization = organization
         )
     }
 
+//    fun updateEntity(template: Template, updateRequest: TemplateUpdateRequest): Template {
+//        return updateRequest.run {
+//            template.apply {
+//                updateRequest.templateName.let { this.templateName = it }
+//                updateRequest.keys.let { this.keys = it }
+//            }
+//        }
+//    }
+}
+@Component
+class AttachmentMapper {
+
+        @Value("\${file.path}")
+        lateinit var filePath: String
+
+        fun createDirectoryPath(
+            date: LocalDate = LocalDate.now(),
+            subFolder: String? = null,
+            contentType: String? = null
+        ): Triple<File, UUID, String> {
+            val uuid = UUID.randomUUID()
+            val baseDir = "$filePath/${date.year}/${date.monthValue}/${date.dayOfMonth}"
+
+            val fullPath = when {
+                subFolder != null -> "$baseDir/$subFolder"
+                contentType != null -> "$baseDir/${contentType.split("/")[0]}"
+                else -> baseDir
+            }
+
+            val directory = File(fullPath)
+            if (!directory.exists()) {
+                directory.mkdirs()
+            }
+
+            return Triple(directory, uuid, fullPath)
+
     fun toInfo(attachment: Attachment): AttachmentInfo {
-        return attachment.run { AttachmentInfo(
-            id = id!!,
-            name = name,
-            contentType = contentType,
-            size = size,
-            extension = extension,
-            path = path)
+        return attachment.run {
+            AttachmentInfo(
+                id = id!!,
+                name = name,
+                contentType = contentType,
+                size = size,
+                extension = extension,
+                path = path
+            )
         }
-    }
+
+        fun toEntity(multipartFile: MultipartFile): Attachment {
+            val contentType = multipartFile.contentType ?: throw IllegalArgumentException("Content type is required")
+            val split = contentType.split("/")
+            val extension = split.getOrElse(1) { "" }
+
+            val (_, uuid, path) = createDirectoryPath(contentType = contentType)
+
+            return Attachment(
+                name = uuid.toString(),
+                contentType = contentType,
+                size = multipartFile.size,
+                extension = extension,
+                path = "$path/$uuid.$extension"
+            )
+        }
+        fun toInfo(attachment: Attachment): AttachmentInfo {
+            return attachment.run { AttachmentInfo(
+                id = id!!,
+                name = name,
+                contentType = contentType,
+                size = size,
+                extension = extension,
+                path = path)
+            }
+        }
+
 }
 
 @Component
@@ -119,19 +166,21 @@ class UserMapper(
             phoneNumber = request.phoneNumber,
             passWord = passwordEncoder.encode(request.password),
             passportId = request.passportId,
-            role = Role.OPERATOR
+            role = Role.DIRECTOR
         )
     }
+
     fun toEntity(request: CreateOperatorRequest): User {
         return User(
             fullName = request.fullName,
             phoneNumber = request.phoneNumber,
             passWord = passwordEncoder.encode(request.password),
             passportId = request.passportId,
-            role = Role.DIRECTOR,
+            role = Role.OPERATOR,
             organization = mutableListOf(
                 organizationRepository.findByIdAndDeletedFalse(request.organizationId)
-                    ?: throw OrganizationNotFoundException())
+                    ?: throw OrganizationNotFoundException()
+            )
         )
     }
 }

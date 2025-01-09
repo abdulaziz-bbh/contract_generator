@@ -74,7 +74,7 @@ class Key(
 class Template(
     @Column(nullable = false) var templateName: String,
     @OneToOne var file : Attachment,
-    @ManyToOne var organization: Organization? = null,
+    @ManyToOne var organization: Organization,
     @ManyToMany var keys : MutableList<Key> = mutableListOf(),
 ) : BaseEntity()
 
@@ -82,8 +82,8 @@ class Template(
 class Contract(
     @OneToOne val file: Attachment,
     @ManyToOne val template: Template,
-    @ManyToMany val operators : List<User>,
-    @Enumerated(EnumType.STRING) @Column(nullable = false) val status: ContractStatus
+    @ManyToMany val operators : MutableList<User> = mutableListOf(),
+    @Enumerated(EnumType.STRING) @Column(nullable = false) var status: ContractStatus = ContractStatus.COMPLETED
 
 ) : BaseEntity()
 
