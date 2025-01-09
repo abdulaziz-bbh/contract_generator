@@ -20,13 +20,20 @@ data class KeyUpdateRequest(
 
 data class TemplateCreateRequest(
     val templateName: String,
+    val organizationId: Long
 )
 
 data class TemplateResponse(
     val id: Long?,
     val templateName: String?,
     val file : AttachmentResponse?,
+    val organizationName: String?,
     val keys : List<KeyResponse>?
+)
+
+data class TemplateUpdateRequest(
+    val templateName: String,
+    val keys : List<KeyResponse>
 )
 
 data class AttachmentResponse(

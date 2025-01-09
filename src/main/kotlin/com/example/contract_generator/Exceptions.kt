@@ -75,6 +75,10 @@ class PassportIdAlreadyUsedException: GenericException() {
     override fun errorCode(): ErrorCode = ErrorCode.PASSPORT_ALREADY_USED
 }
 
+class UnauthorizedException: GenericException() {
+    override fun errorCode(): ErrorCode = ErrorCode.USER_NOT_AUTHENTICATED
+}
+
 class AttachmentNotFound():GenericException(){
     override fun errorCode(): ErrorCode = ErrorCode.ATTACHMENT_NOT_FOUND
 }

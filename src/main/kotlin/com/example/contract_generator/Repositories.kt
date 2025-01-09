@@ -12,8 +12,8 @@ import org.springframework.data.jpa.repository.support.JpaEntityInformation
 import org.springframework.data.jpa.repository.support.SimpleJpaRepository
 import org.springframework.data.repository.NoRepositoryBean
 import org.springframework.data.repository.findByIdOrNull
-import org.springframework.stereotype.Repository
 import org.springframework.data.repository.query.Param
+import org.springframework.stereotype.Repository
 
 
 @NoRepositoryBean
@@ -70,10 +70,14 @@ interface KeyRepository : BaseRepository<Key> {
     """)
     fun findByName(id: Long, name: String): Key?
 
+    fun findAllByKeyInAndDeletedFalse(keys: Collection<String>): List<Key>
+
+
 }
 
 @Repository
 interface TemplateRepository : BaseRepository<Template> {
+
 
 }
 
@@ -96,6 +100,9 @@ interface TokenRepository : BaseRepository<Token>{
 
 interface OrganizationRepository : BaseRepository<Organization>{
     fun existsByName(name: String): Boolean
+
+    @Query(value = "select * from Organization where id = :id", nativeQuery = true)
+    fun findByIdNative(@Param("id") id: Long): Organization?
 }
 
 interface AttachmentRepository : BaseRepository<Attachment> {}
