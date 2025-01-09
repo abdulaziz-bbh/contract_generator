@@ -98,6 +98,7 @@ class AuthConfig(
 class AppConfiguration(): AuditorAware<Long>{
 
     override fun getCurrentAuditor(): Optional<Long> {
-        return Optional.ofNullable(1L)
+
+        return Optional.ofNullable(getCurrentUserId()?.id)
     }
 }

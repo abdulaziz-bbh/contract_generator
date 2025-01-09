@@ -2,11 +2,10 @@ package com.example.contract_generator
 
 import org.springframework.security.core.context.SecurityContextHolder
 
-fun getCurrentUser(): User? {
-    val principal = SecurityContextHolder.getContext().authentication.details
-    return if (principal is User) {
-        principal
-    } else {
-        null
+fun getCurrentUserId(): User? {
+    val authentication = SecurityContextHolder.getContext().authentication
+    if (authentication != null && authentication.principal is User) {
+        return (authentication.principal as User)
     }
+    return null
 }
