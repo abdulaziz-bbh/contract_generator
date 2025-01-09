@@ -26,7 +26,6 @@ abstract class BaseEntity(
 class User(
     @Column(nullable = false) var fullName: String,
     @Column(nullable = false) var phoneNumber: String,
-    @Column(nullable = false) val pnfl: String,
     @Column(nullable = false) val passportId: String,
     @Column(nullable = false) var passWord: String,
     @ManyToMany val organization: MutableList<Organization>? = null,
@@ -54,7 +53,7 @@ class Token(
 @Entity
 class Organization(
     @Column(nullable = false) var name: String,
-    @ManyToOne var director: User? = null
+    @Column(nullable = false) var address: String
 ) : BaseEntity()
 
 @Entity
@@ -75,21 +74,22 @@ class Key(
 class Template(
     @Column(nullable = false) var templateName: String,
     @OneToOne var file : Attachment,
+    @ManyToOne var organization: Organization? = null,
     @ManyToMany var keys : MutableList<Key> = mutableListOf(),
 ) : BaseEntity()
 
 @Entity
 class Contract(
     @OneToOne val file: Attachment,
-//    @ManyToOne val client: Client,
-//    @ManyToMany val operators : MutableList<User> = mutableListOf(),
-    @Enumerated(EnumType.STRING) @Column(nullable = false) val status: ContractStatus=ContractStatus.STARTED
+    @ManyToOne val template: Template,
+    @ManyToMany val operators : List<User>,
+    @Enumerated(EnumType.STRING) @Column(nullable = false) val status: ContractStatus
 
 ) : BaseEntity()
 
 @Entity
-class Client(
-    @Column(nullable = false) val fullName: String,
-    @Column(nullable = false) val pnfl: String,
-    @Column(nullable = false) val passportId: String,
+class ContractData(
+    @Column(nullable = false) val key: String,
+    @Column(nullable = false) val value: String,
+    @ManyToOne val contract: Contract,
 ) : BaseEntity()

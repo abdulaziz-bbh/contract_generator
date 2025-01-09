@@ -17,10 +17,9 @@ class DataLoader(
             passWord = passwordEncoder.encode("admin"),
             phoneNumber = "1234567890",
             passportId = "1234567890",
-            pnfl = "1234567890",
             role = Role.ADMIN
         )
-        if (!userRepository.existsByPnflOrPassportIdOrPhoneNumber(admin.pnfl, admin.passportId, admin.phoneNumber)){
+        if (!userRepository.existsByPassportIdOrPhoneNumber(admin.passportId, admin.phoneNumber)){
             userRepository.save(admin)
         }
     }

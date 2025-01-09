@@ -67,14 +67,12 @@ class TemplateMapper {
         )
     }
 
-    fun toEntity(createRequest: TemplateCreateRequest, file: Attachment, keys: List<Key>): Template {
-        return createRequest.run {
-            Template(
+    fun toEntity(templateName: String, file: Attachment, keys: List<Key>): Template {
+        return Template(
                 templateName = templateName,
                 file = file,
-                keys = keys.toMutableList()
+                keys = keys.toMutableList(),
             )
-        }
     }
 }
 @Component
@@ -143,7 +141,6 @@ class UserMapper(
             fullName = request.fullName,
             phoneNumber = request.phoneNumber,
             passWord = passwordEncoder.encode(request.password),
-            pnfl = request.pnfl,
             passportId = request.passportId,
             role = Role.OPERATOR
         )
@@ -153,7 +150,6 @@ class UserMapper(
             fullName = request.fullName,
             phoneNumber = request.phoneNumber,
             passWord = passwordEncoder.encode(request.password),
-            pnfl = request.pnfl,
             passportId = request.passportId,
             role = Role.DIRECTOR,
             organization = mutableListOf(

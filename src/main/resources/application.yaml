@@ -1,15 +1,15 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/democloud
+    url: jdbc:postgresql://localhost:5432/generator
+    driver-class-name: org.postgresql.Driver
     username: postgres
     password: 1234
+
   jpa:
     hibernate:
-      ddl-auto: create-drop
-    show-sql: true
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
+      ddl-auto: update
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+
   servlet:
     multipart:
       enabled: true
