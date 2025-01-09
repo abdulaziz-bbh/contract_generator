@@ -6,6 +6,7 @@ import java.time.LocalDate
 import java.util.*
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import org.springframework.stereotype.Component
+import java.io.File
 
 @Component
 class KeyMapper {
@@ -76,38 +77,60 @@ class TemplateMapper {
         }
     }
 }
-
 @Component
 class AttachmentMapper {
-    @Value("\${file.path}")
-    lateinit var filePath: String
 
-    fun toEntity(multipartFile: MultipartFile): Attachment {
-        val contentType = multipartFile.contentType ?: throw IllegalArgumentException("Content type is required")
-        val split = contentType.split("/")
-        val date = LocalDate.now()
-        val uuid = UUID.randomUUID()
-        val extension = split.getOrElse(1) { "" }
-        val path = "$filePath/${date.year}/${date.monthValue}/${date.dayOfMonth}/${split[0]}/$uuid.$extension"
-        return Attachment(
-            name = uuid.toString(),
-            contentType = contentType,
-            size = multipartFile.size,
-            extension = extension,
-            path = path
-        )
-    }
+        @Value("\${file.path}")
+        lateinit var filePath: String
 
-    fun toInfo(attachment: Attachment): AttachmentInfo {
-        return attachment.run { AttachmentInfo(
-            id = id!!,
-            name = name,
-            contentType = contentType,
-            size = size,
-            extension = extension,
-            path = path)
+        fun createDirectoryPath(
+            date: LocalDate = LocalDate.now(),
+            subFolder: String? = null,
+            contentType: String? = null
+        ): Triple<File, UUID, String> {
+            val uuid = UUID.randomUUID()
+            val baseDir = "$filePath/${date.year}/${date.monthValue}/${date.dayOfMonth}"
+
+            val fullPath = when {
+                subFolder != null -> "$baseDir/$subFolder"
+                contentType != null -> "$baseDir/${contentType.split("/")[0]}"
+                else -> baseDir
+            }
+
+            val directory = File(fullPath)
+            if (!directory.exists()) {
+                directory.mkdirs()
+            }
+
+            return Triple(directory, uuid, fullPath)
         }
-    }
+
+        fun toEntity(multipartFile: MultipartFile): Attachment {
+            val contentType = multipartFile.contentType ?: throw IllegalArgumentException("Content type is required")
+            val split = contentType.split("/")
+            val extension = split.getOrElse(1) { "" }
+
+            val (_, uuid, path) = createDirectoryPath(contentType = contentType)
+
+            return Attachment(
+                name = uuid.toString(),
+                contentType = contentType,
+                size = multipartFile.size,
+                extension = extension,
+                path = "$path/$uuid.$extension"
+            )
+        }
+        fun toInfo(attachment: Attachment): AttachmentInfo {
+            return attachment.run { AttachmentInfo(
+                id = id!!,
+                name = name,
+                contentType = contentType,
+                size = size,
+                extension = extension,
+                path = path)
+            }
+        }
+
 }
 
 @Component

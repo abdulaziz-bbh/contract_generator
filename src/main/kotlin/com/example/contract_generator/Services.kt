@@ -1,30 +1,34 @@
 package com.example.contract_generator
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.itextpdf.text.Document
+import com.itextpdf.text.Paragraph
+import com.itextpdf.text.pdf.PdfWriter
 import jakarta.persistence.EntityManager
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
 import jakarta.transaction.Transactional
 import org.apache.poi.xwpf.usermodel.XWPFDocument
+import org.apache.poi.xwpf.usermodel.XWPFParagraph
+import org.apache.poi.xwpf.usermodel.XWPFRun
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.core.io.InputStreamResource
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable
+import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
-import org.springframework.stereotype.Service
-import java.io.File
-import com.fasterxml.jackson.databind.ObjectMapper
-import jakarta.servlet.http.HttpServletRequest
-import jakarta.servlet.http.HttpServletResponse
-import org.springframework.http.HttpHeaders
 import org.springframework.security.authentication.AuthenticationManager
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.core.userdetails.UserDetails
 import org.springframework.security.core.userdetails.UserDetailsService
-import org.springframework.beans.factory.annotation.Value
+import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
-import java.io.FileInputStream
-import java.io.IOException
-import java.util.*
+import java.io.*
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 
 interface UserService{
@@ -64,7 +68,12 @@ interface AttachmentService {
     fun download(id: Long): ResponseEntity<*>
     fun preview(id: Long): ResponseEntity<*>
     fun findById(id: Long): Attachment
+    fun convertDocxToPdf(docxFile: File): Attachment
 }
+interface ContractService {
+    fun generateContract(contractRequestDto: ContractRequestDto): Contract
+}
+
 
 @Service
 class KeyServiceImpl(
@@ -322,6 +331,7 @@ class AttachmentServiceImpl(
     ) : AttachmentService {
     @Value("\${file.path}")
     lateinit var filePath: String
+    @Transactional
     override fun upload(multipartFile: MultipartFile): AttachmentInfo {
         val entity = attachmentMapper.toEntity(multipartFile)
         val file = File(entity.path).apply {
@@ -336,7 +346,7 @@ class AttachmentServiceImpl(
     }
 
 
-    @Throws(IOException::class)
+
     override fun download(id: Long): ResponseEntity<*> {
         val fileEntity = repository.findByIdAndDeletedFalse(id)?:throw AttachmentNotFound()
 
@@ -350,7 +360,8 @@ class AttachmentServiceImpl(
                 .body(resource)
         }
     }
-    @Throws(IOException::class)
+
+
     override fun preview(id: Long): ResponseEntity<*> {
         val fileEntity = repository.findByIdAndDeletedFalse(id)?:throw AttachmentNotFound()
 
@@ -371,5 +382,140 @@ class AttachmentServiceImpl(
             return attachment.get()
         }else throw AttachmentNotFound()
     }
+    override fun convertDocxToPdf(docxFile: File): Attachment {
+
+        val directory = docxFile.absolutePath.substringBeforeLast("/")
+        val uuid = docxFile.nameWithoutExtension
+        val pdfFile = File(directory, "$uuid.pdf")
+        pdfFile.createNewFile()
+
+        val docxInputStream: InputStream = FileInputStream(docxFile)
+        XWPFDocument(docxInputStream).use { document ->
+            FileOutputStream(pdfFile).use { pdfOutputStream ->
+                val pdfDocument = Document()
+                PdfWriter.getInstance(pdfDocument, pdfOutputStream)
+                pdfDocument.open()
+
+                val paragraphs: List<XWPFParagraph> = document.getParagraphs()
+                for (paragraph in paragraphs) {
+                    pdfDocument.add(Paragraph(paragraph.text))
+                }
+                pdfDocument.close()
+            }
+        }
+        val attachment = Attachment(
+            name = uuid,
+            contentType = "application/pdf",
+            size = pdfFile.length(),
+            extension = "pdf",
+            path = directory + ".pdf"
+        )
+        return repository.save(attachment)
+    }
+}
+
+@Service
+class ContractServiceImpl(private val repository: AttachmentRepository,
+                          private val templateService: TemplateService,
+                          private val contractRepository: ContractRepository,
+                          private val clientRepository: ClientRepository,
+                          private val attachmentMapper: AttachmentMapper,
+                          private val attachmentService: AttachmentService) : ContractService {
+    @Transactional
+    override fun generateContract(contractRequestDto: ContractRequestDto): Contract {
+        val template = templateService.getOne(contractRequestDto.templateId)
+        val attachment = attachmentService.download(template.file?.id!!)
+
+        val inputStreamResource = attachment.body as? InputStreamResource
+            ?: throw IllegalArgumentException("Attachment body is not an InputStreamResource")
+
+        val (_, uuid, path) = attachmentMapper.createDirectoryPath(subFolder = "contract")
+        val tempFile = File("$path/$uuid.docx")
+
+        inputStreamResource.inputStream.use { inputStream ->
+            Files.copy(inputStream, tempFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        }
+
+        val replacedFile = replaceKeysWithStyles(tempFile, contractRequestDto.keys)
+
+        val pdfFile = attachmentService.convertDocxToPdf(replacedFile)
+
+        val contract = Contract(
+            file = pdfFile,
+//            operators = mutableListOf()
+        )
+        val savedContract = contractRepository.save(contract)
+
+//        contractRequestDto.keys.forEach { (key, value) ->
+//            val contractData = ContractData(
+//                contract = savedContract,
+//                key = key,
+//                value = value
+//            )
+//            contractRepository.save(contractData)
+//        }
+
+        // Add the operator to the contract
+//        val operator = SecurityContextHolder.getContext().authentication.principal as User
+//        contract.operators.add(operator)
+
+        return contractRepository.save(contract)
+    }
+
+    private fun replaceKeysWithStyles(docxFile: File, keys: Map<String, String>): File {
+        val wordDoc = XWPFDocument(Files.newInputStream(docxFile.toPath()))
+
+        // Replace keys in paragraphs
+        wordDoc.paragraphs.forEach { paragraph ->
+            replaceTextInRuns(paragraph.runs, keys)
+        }
+
+        // Replace keys in tables
+        wordDoc.tables.forEach { table ->
+            table.rows.forEach { row ->
+                row.tableCells.forEach { cell ->
+                    cell.paragraphs.forEach { paragraph ->
+                        replaceTextInRuns(paragraph.runs, keys)
+                    }
+                }
+            }
+        }
+
+        // Save the updated document
+        val replacedFile = File(docxFile.parentFile, "replaced_${docxFile.name}")
+        Files.newOutputStream(replacedFile.toPath()).use { wordDoc.write(it) }
+        return replacedFile
+    }
+
+    private fun replaceTextInRuns(runs: List<XWPFRun>, keys: Map<String, String>) {
+        runs.forEach { run ->
+            keys.forEach { (key, value) ->
+                if (run.text().contains(key)) {
+                    // Preserve existing style attributes
+                    val fontFamily = run.fontFamily
+                    val fontSize = run.fontSize
+                    val bold = run.isBold
+                    val italic = run.isItalic
+                    val color = run.color
+
+                    // Replace text while keeping the style
+                    val newText = run.text().replace(key, value)
+                    run.setText(newText, 0)
+
+                    run.fontFamily = fontFamily
+                    run.fontSize = fontSize
+                    run.isBold = bold
+                    run.isItalic = italic
+                    run.color = color
+                }
+            }
+        }
+    }
+
+
+
+
+
+
 }
 
