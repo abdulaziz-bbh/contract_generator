@@ -72,7 +72,6 @@ interface KeyRepository : BaseRepository<Key> {
 
 }
 
-interface ClientRepository : BaseRepository<Client> {}
 
 interface ContractRepository : BaseRepository<Contract> {}
 
@@ -102,3 +101,5 @@ interface OrganizationRepository : BaseRepository<Organization>{
 }
 
 interface AttachmentRepository : BaseRepository<Attachment> {}
+
+interface ContractDataRepository : BaseRepository<ContractData>{}

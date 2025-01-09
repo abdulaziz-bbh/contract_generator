@@ -14,6 +14,7 @@ import java.io.File
 import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import org.apache.poi.xwpf.usermodel.XWPFRun
 import org.springframework.http.HttpHeaders
 import org.springframework.security.authentication.AuthenticationManager
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
@@ -23,6 +24,9 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.web.multipart.MultipartFile
 import java.io.FileInputStream
 import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.Paths
+import java.nio.file.StandardCopyOption
 import java.util.*
 
 
@@ -63,6 +67,112 @@ interface AttachmentService {
     fun download(id: Long): ResponseEntity<*>
     fun preview(id: Long): ResponseEntity<*>
     fun findById(id: Long): Attachment
+}
+
+interface ContractService{
+    fun generateContract(contractRequestDto: ContractRequestDto): Contract
+}
+
+@Service
+class ContractServiceImpl(
+    private val templateRepository: TemplateRepository,
+    private val attachmentService: AttachmentService,
+    private val attachmentRepository: AttachmentRepository,
+    private val attachmentMapper: AttachmentMapper,
+    private val contractRepository: ContractRepository,
+    private val contractDataRepository: ContractDataRepository
+
+): ContractService{
+    @Transactional
+    override fun generateContract(contractRequestDto: ContractRequestDto): Contract {
+        val template: Template = templateRepository.findByIdAndDeletedFalse(contractRequestDto.templateId)
+            ?: throw TemplateNotFoundException()
+
+        val (_, uuid, path) = attachmentMapper.createDirectoryPath(subFolder = "contract")
+        val tempFile = File("$path/$uuid.docx")
+
+        Files.copy(Paths.get(template.file.path), tempFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+
+
+        val replacedFile = replaceKeysWithStyles(tempFile, contractRequestDto.keys)
+
+        val attachment2 = Attachment(
+            name = replacedFile.name,
+            contentType = "application/docx",
+            size = replacedFile.length(),
+            extension = "docx",
+            path = replacedFile.absolutePath
+        )
+
+        attachmentRepository.save(attachment2)
+
+        val contract = Contract(
+            file = attachment2,
+            template=template,
+        )
+
+        getCurrentUserId()?.let { contract.operators.add(it) }
+
+
+        contractRequestDto.keys.forEach { (key, value) ->
+            val contractData = ContractData(
+                contract = contract,
+                key = key,
+                value = value
+            )
+            contractDataRepository.save(contractData)
+        }
+        contract.status=ContractStatus.PENDING
+
+        return contractRepository.save(contract)
+    }
+
+    private fun replaceKeysWithStyles(docxFile: File, keys: Map<String, String>): File {
+        val wordDoc = XWPFDocument(Files.newInputStream(docxFile.toPath()))
+
+        wordDoc.paragraphs.forEach { paragraph ->
+            replaceTextInRuns(paragraph.runs, keys)
+        }
+
+        wordDoc.tables.forEach { table ->
+            table.rows.forEach { row ->
+                row.tableCells.forEach { cell ->
+                    cell.paragraphs.forEach { paragraph ->
+                        replaceTextInRuns(paragraph.runs, keys)
+                    }
+                }
+            }
+        }
+
+        val replacedFile = File(docxFile.parentFile, "contract_${docxFile.name}")
+        Files.newOutputStream(replacedFile.toPath()).use { wordDoc.write(it) }
+        return replacedFile
+    }
+
+    private fun replaceTextInRuns(runs: List<XWPFRun>, keys: Map<String, String>) {
+        runs.forEach { run ->
+            keys.forEach { (key, value) ->
+                if (run.text().contains(key)) {
+                    val fontFamily = run.fontFamily
+                    val fontSize = run.fontSize
+                    val bold = run.isBold
+                    val italic = run.isItalic
+                    val color = run.color
+                    val underline = run.underline
+
+                    val newText = run.text().replace(key, value)
+                    run.setText(newText, 0)
+
+                    run.fontFamily = fontFamily
+                    run.fontSize = fontSize
+                    run.isBold = bold
+                    run.isItalic = italic
+                    run.color = color
+                    run.underline = underline
+                }
+            }
+        }
+    }
 }
 
 @Service
