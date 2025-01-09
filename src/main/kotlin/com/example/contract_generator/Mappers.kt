@@ -70,7 +70,7 @@ class TemplateMapper {
         return Template(
                 templateName = templateName,
                 file = file,
-                keys = keys.toMutableList()
+                keys = keys.toMutableList(),
             )
     }
 }
@@ -118,7 +118,6 @@ class UserMapper(
             fullName = request.fullName,
             phoneNumber = request.phoneNumber,
             passWord = passwordEncoder.encode(request.password),
-            pnfl = request.pnfl,
             passportId = request.passportId,
             role = Role.OPERATOR
         )
@@ -128,7 +127,6 @@ class UserMapper(
             fullName = request.fullName,
             phoneNumber = request.phoneNumber,
             passWord = passwordEncoder.encode(request.password),
-            pnfl = request.pnfl,
             passportId = request.passportId,
             role = Role.DIRECTOR,
             organization = mutableListOf(

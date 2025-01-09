@@ -17,7 +17,6 @@ import jakarta.servlet.http.HttpServletResponse
 import org.springframework.http.HttpHeaders
 import org.springframework.security.authentication.AuthenticationManager
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
-import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.core.userdetails.UserDetails
 import org.springframework.security.core.userdetails.UserDetailsService
 import org.springframework.beans.factory.annotation.Value
@@ -29,7 +28,7 @@ import java.util.*
 
 interface UserService{
     fun createOperator(request: CreateOperatorRequest)
-    fun existsUserData(pnfl: String, passportId: String, phoneNumber: String)
+    fun existsUserData(passportId: String, phoneNumber: String)
 }
 interface AuthService{
     fun registration(request: CreateDirectorRequest)
@@ -195,12 +194,12 @@ class UserServiceImpl(
 ): UserService {
 
     override fun createOperator(request: CreateOperatorRequest) {
-        existsUserData(request.pnfl, request.passportId, request.phoneNumber)
+        existsUserData(request.passportId, request.phoneNumber)
         userRepository.save(userMapper.toEntity(request))
     }
 
-    override fun existsUserData(pnfl: String, passportId: String, phoneNumber: String) {
-        if (userRepository.existsByPnflOrPassportIdOrPhoneNumber(pnfl, passportId, phoneNumber))
+    override fun existsUserData(passportId: String, phoneNumber: String) {
+        if (userRepository.existsByPassportIdOrPhoneNumber(passportId, phoneNumber))
             throw UserAlreadyExistsException()
     }
 
@@ -214,8 +213,7 @@ class OrganizationServiceImpl(
         existsByName(request.name)
         val organization = Organization(
             name = request.name,
-            director = SecurityContextHolder.getContext().authentication.principal as User
-
+            address = request.address
         )
         organizationRepository.save(organization)
     }
@@ -250,7 +248,7 @@ class AuthServiceImpl(
 ) : AuthService {
 
     override fun registration(request: CreateDirectorRequest) {
-        existsUserData(request.pnfl, request.passportId, request.phoneNumber)
+        existsUserData(request.passportId, request.phoneNumber)
         userRepository.save(userMapper.toEntity(request))
     }
 
@@ -310,8 +308,8 @@ class AuthServiceImpl(
         )
         tokenRepository.save(token)
     }
-    private fun existsUserData(pnfl: String, passportId: String, phoneNumber: String) {
-        if (userRepository.existsByPnflOrPassportIdOrPhoneNumber(pnfl, passportId, phoneNumber))
+    private fun existsUserData(passportId: String, phoneNumber: String) {
+        if (userRepository.existsByPassportIdOrPhoneNumber(passportId, phoneNumber))
             throw UserAlreadyExistsException()
     }
 }

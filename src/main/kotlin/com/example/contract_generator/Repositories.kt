@@ -79,7 +79,7 @@ interface TemplateRepository : BaseRepository<Template> {
 
 interface UserRepository : BaseRepository<User>{
 
-    fun existsByPnflOrPassportIdOrPhoneNumber(pnfl: String, passportId:String, phoneNumber: String): Boolean
+    fun existsByPassportIdOrPhoneNumber(passportId:String, phoneNumber: String): Boolean
 
     fun findByPhoneNumber(phoneNumber: String): User?
 

@@ -43,7 +43,6 @@ data class CreateDirectorRequest(
     @field:NotNull val fullName: String,
     @field:NotNull val password: String,
     @field:NotNull val phoneNumber: String,
-    @field:NotNull val pnfl: String,
     @field:NotNull val passportId: String
 )
 
@@ -68,6 +67,7 @@ data class AuthenticationDto(
 
 data class CreateOrganizationRequest(
     @field:NotNull val name: String,
+    @field:NotNull val address: String,
 )
 
 data class UpdateOrganizationRequest(
