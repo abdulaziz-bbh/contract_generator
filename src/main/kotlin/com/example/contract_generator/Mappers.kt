@@ -116,13 +116,16 @@ class AttachmentMapper {
             return Triple(directory, uuid, fullPath)
         }
 
-        fun toEntity(multipartFile: MultipartFile): Attachment {
+        fun toEntity(multipartFile: MultipartFile , subFolder: String?=null): Attachment {
             val contentType = multipartFile.contentType ?: throw IllegalArgumentException("Content type is required")
             val split = contentType.split("/")
             val extension = split.getOrElse(1) { "" }
 
-            val (_, uuid, path) = createDirectoryPath(contentType = contentType)
-
+            val (_, uuid, path) = if (subFolder != null) {
+                createDirectoryPath(subFolder = subFolder, contentType = contentType)
+            } else {
+                createDirectoryPath(contentType = contentType)
+            }
             return Attachment(
                 name = uuid.toString(),
                 contentType = contentType,

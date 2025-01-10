@@ -76,7 +76,9 @@ interface KeyRepository : BaseRepository<Key> {
 }
 
 
-interface ContractRepository : BaseRepository<Contract> {}
+interface ContractRepository : BaseRepository<Contract> {
+    fun findByFile_Name(fileName: String): Contract?
+}
 
 @Repository
 interface TemplateRepository : BaseRepository<Template> {
@@ -110,7 +112,10 @@ interface OrganizationRepository : BaseRepository<Organization>{
 }
 
 interface AttachmentRepository : BaseRepository<Attachment> {
+
     fun findByName(name: String): Attachment?
 }
 
-interface ContractDataRepository : BaseRepository<ContractData>{}
+interface ContractDataRepository : BaseRepository<ContractData>{
+    fun findAllByContract(contract: Contract): List<ContractData>
+}
