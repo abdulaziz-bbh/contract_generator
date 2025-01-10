@@ -69,6 +69,9 @@ class ContractController(val service:ContractService) {
     @GetMapping
     fun getAll( @RequestParam("date") @JsonFormat(pattern = "yyyy-MM-dd") date: LocalDate) = service.getPdfsZip(date)
 
+    @GetMapping("/get")
+    fun getZip( @RequestParam list: List<String>) = service.getZip(list)
+
 }
     @RestController
     @RequestMapping("/api/v1/templates")

@@ -75,6 +75,7 @@ interface AttachmentService {
 interface ContractService{
     fun generateContract(list: List<ContractRequestDto>): ResponseEntity<*>
     fun updateContract(list: List<ContractUpdateDto>): ResponseEntity<*>
+    fun getZip(list: List<String>): ResponseEntity<*>
     fun getPdfsZip(date: LocalDate):ResponseEntity<*>
 }
 
@@ -176,6 +177,27 @@ class ContractServiceImpl(
         }
 
         return createZipFile(files)
+    }
+
+    override fun getZip(list: List<String>): ResponseEntity<*> {
+        var files :MutableList<File> = mutableListOf()
+        for (s in list) {
+            files.add(contractRepository.findByFile_Name(s)?.let {
+                File(it.file.path)
+            }
+                ?: throw ContractNotFound())
+        }
+        val pdfPath = "${attachmentMapper.filePath}/pdf"
+        val file = File(pdfPath)
+        if (!file.exists()) {
+            file.mkdirs()
+        }
+        val pdfFiles = mutableListOf<File>()
+        for (f in files) {
+            convertDocxToPdf(f.absolutePath, pdfPath)
+            pdfFiles.add(File("${pdfPath}/${f.nameWithoutExtension}.pdf"))
+        }
+        return createZipFile(pdfFiles)
     }
 
     override fun getPdfsZip(date: LocalDate): ResponseEntity<*> {
