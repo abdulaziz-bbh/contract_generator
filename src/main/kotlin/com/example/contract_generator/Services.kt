@@ -59,8 +59,9 @@ interface TemplateService {
     fun getAll(page: Int, size: Int): Page<TemplateResponse>
     fun getAll(): List<TemplateResponse>
     fun getOne(id: Long): TemplateResponse
-    fun create(multipartFile: MultipartFile)
+    fun create( organizationId: Long, multipartFile: MultipartFile)
     fun delete(id: Long)
+    fun update(templateId: Long, multipartFile: MultipartFile)
 }
 
 interface AttachmentService {
@@ -68,6 +69,7 @@ interface AttachmentService {
     fun download(id: Long): ResponseEntity<*>
     fun preview(id: Long): ResponseEntity<*>
     fun findById(id: Long): Attachment
+    fun delete(id: Long)
 }
 
 interface ContractService{
@@ -138,7 +140,7 @@ class ContractServiceImpl(
     @Transactional
     override fun updateContract(list: List<ContractUpdateDto>): ResponseEntity<*>{
 
-        var files: MutableList<File> = mutableListOf()
+        val files: MutableList<File> = mutableListOf()
         list.forEach { contractUpdateDto ->
             val contract = contractRepository.findByFile_Name(contractUpdateDto.fileName)
                 ?: throw ContractNotFound()
@@ -363,6 +365,7 @@ class TemplateServiceImpl(
     private val templateMapper: TemplateMapper,
     private val attachmentService: AttachmentService,
     private val templateRepository: TemplateRepository,
+    private val organizationRepository: OrganizationRepository
     //private val attachment: AttachmentMapper
 ) : TemplateService {
 
@@ -384,12 +387,19 @@ class TemplateServiceImpl(
         } ?: throw KeyNotFoundException()
     }
 
-    override fun create(multipartFile: MultipartFile) {
-        val attachmentInfo = attachmentService.upload(multipartFile, "template")
-        val attachment = attachmentService.findById(attachmentInfo.id)
+
+    override fun create(organizationId: Long, multipartFile: MultipartFile) {
+        val organization = organizationRepository.findById(organizationId)
+            .orElseThrow { OrganizationNotFoundException() }
 
         val templateName = multipartFile.originalFilename?.substringBeforeLast(".")
             ?: throw InvalidTemplateNameException()
+
+        if (templateRepository.existsByTemplateNameAndOrganizationId(templateName, organizationId)) {
+            throw TemplateAlreadyExistsException()
+        }
+        val attachmentInfo = attachmentService.upload(multipartFile)
+        val attachment = attachmentService.findById(attachmentInfo.id)
 
         val extractedKeys = extractKeysFromFile(attachmentInfo)
 
@@ -403,7 +413,8 @@ class TemplateServiceImpl(
                 keyRepository.findByKeyAndDeletedFalse(keyString) ?: throw KeyAlreadyExistsException()
             }
         }
-        val template = templateMapper.toEntity(templateName,attachment,keyEntities)
+
+        val template = templateMapper.toEntity(templateName, attachment, keyEntities, organization)
         templateRepository.save(template)
     }
 
@@ -425,6 +436,44 @@ class TemplateServiceImpl(
         return keys
     }
 
+    override fun update(templateId: Long, multipartFile: MultipartFile) {
+        val existingTemplate = templateRepository.findByIdAndDeletedFalse(templateId)
+            ?: throw TemplateNotFoundException()
+
+        val updatedAttachmentInfo = attachmentService.upload(multipartFile)
+        val updatedAttachment = attachmentService.findById(updatedAttachmentInfo.id)
+
+        val updatedTemplateName = multipartFile.originalFilename?.substringBeforeLast(".")
+            ?: existingTemplate.templateName
+
+        val extractedKeys = extractKeysFromFile(updatedAttachmentInfo)
+
+        val existingKeys = keyRepository.findAllByKeyInAndDeletedFalse(extractedKeys)
+        val existingKeyStrings = existingKeys.map { it.key }.toSet()
+
+        val newKeys = extractedKeys.filter {  it !in existingKeyStrings }.map { keyString ->
+            val keyCreateRequest = KeyCreateRequest(key = keyString)
+            keyService.create(keyCreateRequest)
+            keyRepository.findByKeyAndDeletedFalse(keyString)
+                ?: throw KeyAlreadyExistsException()
+        }
+        val allKeys = existingKeys + newKeys
+
+        val oldFileName = existingTemplate.templateName
+        val newFileName = multipartFile.originalFilename?.substringBeforeLast(".")
+        if (oldFileName != null && newFileName != null &&  oldFileName == newFileName) {
+            attachmentService.delete(existingTemplate.file.id!!)
+        }
+
+        val updatedTemplate = existingTemplate.apply {
+            this.templateName = updatedTemplateName
+            this.file = updatedAttachment
+            this.keys = allKeys.toMutableList()
+        }
+        templateRepository.save(updatedTemplate)
+    }
+
+
     @Transactional
     override fun delete(id: Long) {
         templateRepository.trash(id) ?: throw TemplateNotFoundException()
@@ -444,7 +493,9 @@ class UserServiceImpl(
     }
 
     override fun existsUserData(passportId: String, phoneNumber: String) {
-        if (userRepository.existsByPassportIdOrPhoneNumber(passportId, phoneNumber))
+        if (userRepository.existsByPassportId(passportId))
+            throw UserAlreadyExistsException()
+        if(userRepository.existsByPhoneNumber(phoneNumber))
             throw UserAlreadyExistsException()
     }
 
@@ -554,7 +605,9 @@ class AuthServiceImpl(
         tokenRepository.save(token)
     }
     private fun existsUserData(passportId: String, phoneNumber: String) {
-        if (userRepository.existsByPassportIdOrPhoneNumber(passportId, phoneNumber))
+        if (userRepository.existsByPassportId(passportId))
+            throw UserAlreadyExistsException()
+        if(userRepository.existsByPhoneNumber(phoneNumber))
             throw UserAlreadyExistsException()
     }
 }
@@ -616,6 +669,13 @@ class AttachmentServiceImpl(
         if (attachment.isPresent) {
             return attachment.get()
         }else throw AttachmentNotFound()
+    }
+
+    @Transactional
+    override fun delete(id: Long) {
+        val file = findById(id)
+        File(file.path).delete()
+        repository.trash(id) ?: throw AttachmentNotFound()
     }
 }
 

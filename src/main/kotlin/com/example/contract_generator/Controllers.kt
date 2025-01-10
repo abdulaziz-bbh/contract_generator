@@ -9,14 +9,11 @@ import org.springframework.web.multipart.MultipartFile
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import jakarta.validation.Valid
-import org.springframework.core.io.InputStreamResource
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import java.io.File
 import java.time.LocalDate
-import java.util.Date
 
 @ControllerAdvice
 class ExceptionHandler(private val errorMessageSource: ResourceBundleMessageSource) {
@@ -29,7 +26,7 @@ class ExceptionHandler(private val errorMessageSource: ResourceBundleMessageSour
 
 
 @RestController
-@RequestMapping("/api/keys")
+@RequestMapping("/api/v1/keys")
 class KeyController(val service: KeyService) {
 
     @GetMapping
@@ -65,8 +62,7 @@ class ContractController(val service:ContractService) {
     fun generate(@RequestBody @Valid request: List<ContractRequestDto>): ResponseEntity<*> {
         return service.generateContract(request)
     }
-
-    @PostMapping("/update")
+    @PutMapping("/update")
     fun update(@RequestBody @Valid request: List<ContractUpdateDto>): ResponseEntity<*> {
         return service.updateContract(request)
     }
@@ -75,7 +71,7 @@ class ContractController(val service:ContractService) {
 
 }
     @RestController
-    @RequestMapping("/api/templates")
+    @RequestMapping("/api/v1/templates")
     class TemplateController(val service: TemplateService) {
 
         @GetMapping
@@ -90,19 +86,52 @@ class ContractController(val service:ContractService) {
             service.getAll(page, size)
 
 
-        @GetMapping("{id}")
-        fun getOne(@PathVariable id: Long) = service.getOne(id)
 
+    @PostMapping("{organization-id}",consumes = ["multipart/form-data"])
+    fun create(
+        @PathVariable("organization-id") organizationId: Long,
+        @RequestParam("file") multipartFile: MultipartFile) = service.create(organizationId,multipartFile)
 
-        @PostMapping(consumes = ["multipart/form-data"])
-        fun create(
+        @PutMapping("{template-id}",consumes = ["multipart/form-data"])
+        fun update(
+            @PathVariable("template-id") templateId: Long,
             @RequestParam("file") multipartFile: MultipartFile
-        ) = service.create(multipartFile)
+        ) = service.update(templateId, multipartFile)
 
 
         @DeleteMapping("{id}")
         fun delete(@PathVariable id: Long) = service.delete(id)
     }
+
+@RestController
+@RequestMapping("/api/v1/attachments")
+class AttachmentController(private val service: AttachmentService) {
+
+    @PostMapping("/upload", consumes = ["multipart/form-data"])
+    fun uploadFile(@RequestParam("file") file: MultipartFile): AttachmentInfo {
+        return service.upload(file)
+    }
+
+
+    @GetMapping("/download/{id}")
+    fun downloadFile(@PathVariable id: Long): ResponseEntity<*> {
+        return service.download(id)
+    }
+
+
+    @GetMapping("/preview/{id}")
+    fun previewFile(@PathVariable id: Long): ResponseEntity<*> {
+        return service.preview(id)
+    }
+
+    @GetMapping("{id}")
+    fun getOne(@PathVariable id: Long) = service.findById(id)
+
+    @DeleteMapping("{id}")
+    fun delete(@PathVariable id: Long) = service.delete(id)
+
+}
+
 
 
     @RestController
