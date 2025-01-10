@@ -58,9 +58,9 @@ class Organization(
 
 @Entity
 class Attachment(
-    @Column(nullable = false) val name: String,
+    @Column(nullable = false) var name: String,
     @Column(nullable = false) val contentType: String,
-    @Column(nullable = false) val size: Long,
+    @Column(nullable = false) var size: Long,
     @Column(nullable = false) val extension: String,
     @Column(nullable = false) val path: String
 ) : BaseEntity()
@@ -90,6 +90,6 @@ class Contract(
 @Entity
 class ContractData(
     @Column(nullable = false) val key: String,
-    @Column(nullable = false) val value: String,
+    @Column(nullable = false) var value: String,
     @ManyToOne val contract: Contract,
 ) : BaseEntity()
