@@ -59,8 +59,9 @@ interface TemplateService {
     fun getAll(page: Int, size: Int): Page<TemplateResponse>
     fun getAll(): List<TemplateResponse>
     fun getOne(id: Long): TemplateResponse
-    fun create(multipartFile: MultipartFile)
+    fun create( organizationId: Long, multipartFile: MultipartFile)
     fun delete(id: Long)
+    fun update(templateId: Long, multipartFile: MultipartFile)
 }
 
 interface AttachmentService {
@@ -139,7 +140,7 @@ class ContractServiceImpl(
     @Transactional
     override fun updateContract(list: List<ContractUpdateDto>): ResponseEntity<*>{
 
-        var files: MutableList<File> = mutableListOf()
+        val files: MutableList<File> = mutableListOf()
         list.forEach { contractUpdateDto ->
             val contract = contractRepository.findByFile_Name(contractUpdateDto.fileName)
                 ?: throw ContractNotFound()
@@ -364,6 +365,7 @@ class TemplateServiceImpl(
     private val templateMapper: TemplateMapper,
     private val attachmentService: AttachmentService,
     private val templateRepository: TemplateRepository,
+    private val organizationRepository: OrganizationRepository
     //private val attachment: AttachmentMapper
 ) : TemplateService {
 
@@ -434,9 +436,6 @@ class TemplateServiceImpl(
         return keys
     }
 
-
-
-      @Transaction
     override fun update(templateId: Long, multipartFile: MultipartFile) {
         val existingTemplate = templateRepository.findByIdAndDeletedFalse(templateId)
             ?: throw TemplateNotFoundException()
@@ -494,7 +493,9 @@ class UserServiceImpl(
     }
 
     override fun existsUserData(passportId: String, phoneNumber: String) {
-        if (userRepository.existsByPassportIdOrPhoneNumber(passportId, phoneNumber))
+        if (userRepository.existsByPassportId(passportId))
+            throw UserAlreadyExistsException()
+        if(userRepository.existsByPhoneNumber(phoneNumber))
             throw UserAlreadyExistsException()
     }
 
@@ -604,7 +605,9 @@ class AuthServiceImpl(
         tokenRepository.save(token)
     }
     private fun existsUserData(passportId: String, phoneNumber: String) {
-        if (userRepository.existsByPassportIdOrPhoneNumber(passportId, phoneNumber))
+        if (userRepository.existsByPassportId(passportId))
+            throw UserAlreadyExistsException()
+        if(userRepository.existsByPhoneNumber(phoneNumber))
             throw UserAlreadyExistsException()
     }
 }

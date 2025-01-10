@@ -9,14 +9,11 @@ import org.springframework.web.multipart.MultipartFile
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import jakarta.validation.Valid
-import org.springframework.core.io.InputStreamResource
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import java.io.File
 import java.time.LocalDate
-import java.util.Date
 
 @ControllerAdvice
 class ExceptionHandler(private val errorMessageSource: ResourceBundleMessageSource) {
@@ -65,14 +62,7 @@ class ContractController(val service:ContractService) {
     fun generate(@RequestBody @Valid request: List<ContractRequestDto>): ResponseEntity<*> {
         return service.generateContract(request)
     }
-
-}
-
-@RestController
-@RequestMapping("/api/v1/templates")
-class TemplateController(val service: TemplateService) {
-
-    @PostMapping("/update")
+    @PutMapping("/update")
     fun update(@RequestBody @Valid request: List<ContractUpdateDto>): ResponseEntity<*> {
         return service.updateContract(request)
     }
@@ -81,7 +71,7 @@ class TemplateController(val service: TemplateService) {
 
 }
     @RestController
-    @RequestMapping("/api/templates")
+    @RequestMapping("/api/v1/templates")
     class TemplateController(val service: TemplateService) {
 
         @GetMapping
@@ -97,16 +87,16 @@ class TemplateController(val service: TemplateService) {
 
 
 
-    @PostMapping("{organizationId}",consumes = ["multipart/form-data"])
+    @PostMapping("{organization-id}",consumes = ["multipart/form-data"])
     fun create(
-        @PathVariable organizationId: Long,
+        @PathVariable("organization-id") organizationId: Long,
         @RequestParam("file") multipartFile: MultipartFile) = service.create(organizationId,multipartFile)
 
-
-        @PostMapping(consumes = ["multipart/form-data"])
-        fun create(
+        @PutMapping("{template-id}",consumes = ["multipart/form-data"])
+        fun update(
+            @PathVariable("template-id") templateId: Long,
             @RequestParam("file") multipartFile: MultipartFile
-        ) = service.create(multipartFile)
+        ) = service.update(templateId, multipartFile)
 
 
         @DeleteMapping("{id}")
