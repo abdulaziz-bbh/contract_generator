@@ -29,7 +29,7 @@ class ExceptionHandler(private val errorMessageSource: ResourceBundleMessageSour
 
 
 @RestController
-@RequestMapping("/api/keys")
+@RequestMapping("/api/v1/keys")
 class KeyController(val service: KeyService) {
 
     @GetMapping
@@ -66,6 +66,12 @@ class ContractController(val service:ContractService) {
         return service.generateContract(request)
     }
 
+}
+
+@RestController
+@RequestMapping("/api/v1/templates")
+class TemplateController(val service: TemplateService) {
+
     @PostMapping("/update")
     fun update(@RequestBody @Valid request: List<ContractUpdateDto>): ResponseEntity<*> {
         return service.updateContract(request)
@@ -90,8 +96,11 @@ class ContractController(val service:ContractService) {
             service.getAll(page, size)
 
 
-        @GetMapping("{id}")
-        fun getOne(@PathVariable id: Long) = service.getOne(id)
+
+    @PostMapping("{organizationId}",consumes = ["multipart/form-data"])
+    fun create(
+        @PathVariable organizationId: Long,
+        @RequestParam("file") multipartFile: MultipartFile) = service.create(organizationId,multipartFile)
 
 
         @PostMapping(consumes = ["multipart/form-data"])
@@ -103,6 +112,36 @@ class ContractController(val service:ContractService) {
         @DeleteMapping("{id}")
         fun delete(@PathVariable id: Long) = service.delete(id)
     }
+
+@RestController
+@RequestMapping("/api/v1/attachments")
+class AttachmentController(private val service: AttachmentService) {
+
+    @PostMapping("/upload", consumes = ["multipart/form-data"])
+    fun uploadFile(@RequestParam("file") file: MultipartFile): AttachmentInfo {
+        return service.upload(file)
+    }
+
+
+    @GetMapping("/download/{id}")
+    fun downloadFile(@PathVariable id: Long): ResponseEntity<*> {
+        return service.download(id)
+    }
+
+
+    @GetMapping("/preview/{id}")
+    fun previewFile(@PathVariable id: Long): ResponseEntity<*> {
+        return service.preview(id)
+    }
+
+    @GetMapping("{id}")
+    fun getOne(@PathVariable id: Long) = service.findById(id)
+
+    @DeleteMapping("{id}")
+    fun delete(@PathVariable id: Long) = service.delete(id)
+
+}
+
 
 
     @RestController

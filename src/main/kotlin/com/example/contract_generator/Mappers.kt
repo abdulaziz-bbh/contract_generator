@@ -114,17 +114,6 @@ class AttachmentMapper {
             }
 
             return Triple(directory, uuid, fullPath)
-
-    fun toInfo(attachment: Attachment): AttachmentInfo {
-        return attachment.run {
-            AttachmentInfo(
-                id = id!!,
-                name = name,
-                contentType = contentType,
-                size = size,
-                extension = extension,
-                path = path
-            )
         }
 
         fun toEntity(multipartFile: MultipartFile , subFolder: String?=null): Attachment {
