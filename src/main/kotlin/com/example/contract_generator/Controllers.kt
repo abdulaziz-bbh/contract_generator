@@ -8,6 +8,8 @@ import org.springframework.web.multipart.MultipartFile
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import jakarta.validation.Valid
+import org.springframework.http.HttpStatus
+import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
@@ -20,8 +22,11 @@ class ExceptionHandler(private val errorMessageSource: ResourceBundleMessageSour
     fun handleAccountException(exception: GenericException): ResponseEntity<BaseMessage> {
         return ResponseEntity.badRequest().body(exception.getErrorMessage(errorMessageSource))
     }
+    @ExceptionHandler(AccessDeniedException::class)
+    fun handleAccountException(exception: AccessDeniedException): ResponseEntity<BaseMessage> {
+        return ResponseEntity.badRequest().body(BaseMessage(HttpStatus.FORBIDDEN.value(),exception.message))
+    }
 }
-
 
 @RestController
 @RequestMapping("/api/keys")
@@ -57,6 +62,7 @@ class KeyController(val service: KeyService) {
 
 @RestController
 @RequestMapping("/api/templates")
+@PreAuthorize("hasAnyAuthority('DIRECTOR')")
 class TemplateController(val service: TemplateService) {
 
     @GetMapping
@@ -122,6 +128,10 @@ class UserController(
     @PostMapping
     fun create(@RequestBody @Valid request: CreateOperatorRequest){
         return userService.createOperator(request)
+    }
+    @GetMapping("{organization-id}")
+    fun getAll(@Valid @PathVariable("organization-id") organizationId: Long): List<UserDto>? {
+        return userService.getAllByOrganizationId(organizationId)
     }
 }
 

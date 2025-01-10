@@ -151,4 +151,13 @@ class UserMapper(
             )
         )
     }
+    fun toDto(entity: User): UserDto {
+        return UserDto(
+            fullName = entity.fullName,
+            phoneNumber = entity.phoneNumber,
+            passportId = entity.passportId,
+            role = entity.role,
+            id = entity.id
+        )
+    }
 }

@@ -87,6 +87,7 @@ interface UserRepository : BaseRepository<User>{
     fun existsByPhoneNumber(phoneNumber: String): Boolean
 
     fun findByPhoneNumber(phoneNumber: String): User?
+    fun findByOrganizationId(orgId: Long): List<User>?
 
 }
 interface TokenRepository : BaseRepository<Token>{
