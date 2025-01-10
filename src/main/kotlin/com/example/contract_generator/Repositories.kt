@@ -81,6 +81,7 @@ interface ContractRepository : BaseRepository<Contract> {}
 @Repository
 interface TemplateRepository : BaseRepository<Template> {
 
+    fun existsByTemplateNameAndOrganizationId(templateName: String, organizationId: Long): Boolean
 
 }
 
@@ -108,6 +109,8 @@ interface OrganizationRepository : BaseRepository<Organization>{
     fun findByIdNative(@Param("id") id: Long): Organization?
 }
 
-interface AttachmentRepository : BaseRepository<Attachment> {}
+interface AttachmentRepository : BaseRepository<Attachment> {
+    fun findByName(name: String): Attachment?
+}
 
 interface ContractDataRepository : BaseRepository<ContractData>{}

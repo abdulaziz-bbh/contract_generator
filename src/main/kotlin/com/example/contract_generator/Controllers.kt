@@ -24,7 +24,7 @@ class ExceptionHandler(private val errorMessageSource: ResourceBundleMessageSour
 
 
 @RestController
-@RequestMapping("/api/keys")
+@RequestMapping("/api/v1/keys")
 class KeyController(val service: KeyService) {
 
     @GetMapping
@@ -63,7 +63,7 @@ class ContractController(val service:ContractService) {
 }
 
 @RestController
-@RequestMapping("/api/templates")
+@RequestMapping("/api/v1/templates")
 class TemplateController(val service: TemplateService) {
 
     @GetMapping
@@ -81,9 +81,9 @@ class TemplateController(val service: TemplateService) {
     fun getOne(@PathVariable id: Long) = service.getOne(id)
 
 
-    @PostMapping(consumes = ["multipart/form-data"])
+    @PostMapping("{organizationId}",consumes = ["multipart/form-data"])
     fun create(
-        @RequestParam organizationId: Long,
+        @PathVariable organizationId: Long,
         @RequestParam("file") multipartFile: MultipartFile) = service.create(organizationId,multipartFile)
 
 
@@ -94,6 +94,36 @@ class TemplateController(val service: TemplateService) {
 
     @DeleteMapping("{id}")
     fun delete(@PathVariable id: Long) = service.delete(id)
+}
+
+
+@RestController
+@RequestMapping("/api/v1/attachments")
+class AttachmentController(private val service: AttachmentService) {
+
+    @PostMapping("/upload", consumes = ["multipart/form-data"])
+    fun uploadFile(@RequestParam("file") file: MultipartFile): AttachmentInfo {
+        return service.upload(file)
+    }
+
+
+    @GetMapping("/download/{id}")
+    fun downloadFile(@PathVariable id: Long): ResponseEntity<*> {
+        return service.download(id)
+    }
+
+
+    @GetMapping("/preview/{id}")
+    fun previewFile(@PathVariable id: Long): ResponseEntity<*> {
+        return service.preview(id)
+    }
+
+    @GetMapping("{id}")
+    fun getOne(@PathVariable id: Long) = service.findById(id)
+
+    @DeleteMapping("{id}")
+    fun delete(@PathVariable id: Long) = service.delete(id)
+
 }
 
 
