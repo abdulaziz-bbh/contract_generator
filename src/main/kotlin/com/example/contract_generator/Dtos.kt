@@ -98,7 +98,12 @@ data class AttachmentInfo(
 )
 
 data class ContractRequestDto(
-    val templateId: Long,
+    val id: Long,
+    val keys: Map<String,String>
+)
+
+data class ContractUpdateDto(
+    val fileName: String,
     val keys: Map<String,String>
 )
     

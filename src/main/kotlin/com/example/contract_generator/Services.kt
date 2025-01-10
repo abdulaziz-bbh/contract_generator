@@ -10,7 +10,6 @@ import org.springframework.data.domain.Pageable
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.stereotype.Service
-import java.io.File
 import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -21,15 +20,16 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.userdetails.UserDetails
 import org.springframework.security.core.userdetails.UserDetailsService
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.multipart.MultipartFile
-import java.io.FileInputStream
-import java.io.IOException
+import java.io.*
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.nio.file.StandardCopyOption
+import java.time.LocalDate
 import java.util.*
-import kotlin.jvm.optionals.getOrNull
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
+
 
 interface UserService{
     fun createOperator(request: CreateOperatorRequest)
@@ -59,26 +59,27 @@ interface TemplateService {
     fun getAll(page: Int, size: Int): Page<TemplateResponse>
     fun getAll(): List<TemplateResponse>
     fun getOne(id: Long): TemplateResponse
-    fun create(organizationId: Long, multipartFile: MultipartFile)
-    fun update(templateId: Long, multipartFile: MultipartFile)
+    fun create(multipartFile: MultipartFile)
     fun delete(id: Long)
 }
 
 interface AttachmentService {
-    fun upload(multipartFile: MultipartFile): AttachmentInfo
+    fun upload(multipartFile: MultipartFile , subFolder : String? = null): AttachmentInfo
     fun download(id: Long): ResponseEntity<*>
     fun preview(id: Long): ResponseEntity<*>
     fun findById(id: Long): Attachment
+    fun delete(id: Long)
 }
 
 interface ContractService{
-    fun generateContract(contractRequestDto: ContractRequestDto): Contract
+    fun generateContract(list: List<ContractRequestDto>): ResponseEntity<*>
+    fun updateContract(list: List<ContractUpdateDto>): ResponseEntity<*>
+    fun getPdfsZip(date: LocalDate):ResponseEntity<*>
 }
 
 @Service
 class ContractServiceImpl(
     private val templateRepository: TemplateRepository,
-    private val attachmentService: AttachmentService,
     private val attachmentRepository: AttachmentRepository,
     private val attachmentMapper: AttachmentMapper,
     private val contractRepository: ContractRepository,
@@ -86,47 +87,127 @@ class ContractServiceImpl(
 
 ): ContractService{
     @Transactional
-    override fun generateContract(contractRequestDto: ContractRequestDto): Contract {
-        val template: Template = templateRepository.findByIdAndDeletedFalse(contractRequestDto.templateId)
-            ?: throw TemplateNotFoundException()
+    override fun generateContract(list: List<ContractRequestDto>): ResponseEntity<*> {
+        val files: MutableList<File> = mutableListOf()
+        list.forEach { contractRequestDto ->
+            val template: Template = templateRepository.findByIdAndDeletedFalse(contractRequestDto.id)
+                ?: throw TemplateNotFoundException()
 
-        val (_, uuid, path) = attachmentMapper.createDirectoryPath(subFolder = "contract")
-        val tempFile = File("$path/$uuid.docx")
+            val (_, uuid, path) = attachmentMapper.createDirectoryPath(subFolder = "contract")
+            val tempFile = File("$path/$uuid.docx")
 
-        Files.copy(Paths.get(template.file.path), tempFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
-
-
-        val replacedFile = replaceKeysWithStyles(tempFile, contractRequestDto.keys)
-
-        val attachment2 = Attachment(
-            name = replacedFile.name,
-            contentType = "application/docx",
-            size = replacedFile.length(),
-            extension = "docx",
-            path = replacedFile.absolutePath
-        )
-
-        attachmentRepository.save(attachment2)
-
-        val contract = Contract(
-            file = attachment2,
-            template=template,
-        )
-
-        getCurrentUserId()?.let { contract.operators.add(it) }
+            Files.copy(Paths.get(template.file.path), tempFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
 
 
-        contractRequestDto.keys.forEach { (key, value) ->
-            val contractData = ContractData(
-                contract = contract,
-                key = key,
-                value = value
+            val replacedFile = replaceKeysWithStyles(tempFile, contractRequestDto.keys)
+
+            val attachment2 = Attachment(
+                name = replacedFile.name,
+                contentType = "application/docx",
+                size = replacedFile.length(),
+                extension = "docx",
+                path = replacedFile.absolutePath
             )
-            contractDataRepository.save(contractData)
-        }
-        contract.status=ContractStatus.PENDING
 
-        return contractRepository.save(contract)
+            attachmentRepository.save(attachment2)
+
+            val contract = Contract(
+                file = attachment2,
+                template = template,
+            )
+
+            getCurrentUserId()?.let { contract.operators.add(it) }?: throw UserNotFoundException()
+
+            contractRequestDto.keys.forEach { (key, value) ->
+                val contractData = ContractData(
+                    contract = contract,
+                    key = key,
+                    value = value
+                )
+                contractDataRepository.save(contractData)
+            }
+            contract.status = ContractStatus.PENDING
+
+            contractRepository.save(contract)
+            files.add(replacedFile)
+        }
+
+        return createZipFile(files)
+    }
+
+
+    @Transactional
+    override fun updateContract(list: List<ContractUpdateDto>): ResponseEntity<*>{
+
+        var files: MutableList<File> = mutableListOf()
+        list.forEach { contractUpdateDto ->
+            val contract = contractRepository.findByFile_Name(contractUpdateDto.fileName)
+                ?: throw ContractNotFound()
+
+            val contractDatas = contractDataRepository
+                .findAllByContract(contract)
+            val keys = contractUpdateDto.keys
+
+            for (contractData in contractDatas) {
+                keys[contractData.key]?.let { newValue ->
+                    contractData.value = newValue
+                    contractDataRepository.save(contractData)
+                }
+            }
+
+            val existingContractData: Map<String, String> = contractDatas.map { it.key to it.value }.toMap()
+
+            val tempFile = File(contract.file.path)
+
+            Files.copy(Paths.get(contract.template.file.path), tempFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+
+            val replacedFile = replaceKeysWithStyles(tempFile, existingContractData)
+
+            contract.file.run {
+                size = replacedFile.length()
+            }
+
+            attachmentRepository.save(contract.file)
+
+            getCurrentUserId()?.let { contract.operators.add(it) }?:throw UserNotFoundException()
+            contractRepository.save(contract)
+            files.add(replacedFile)
+        }
+
+        return createZipFile(files)
+    }
+
+    override fun getPdfsZip(date: LocalDate): ResponseEntity<*> {
+
+        val year = date.year
+        val month = date.monthValue
+        val day = date.dayOfMonth
+
+        val contractFolderPath = "file/$year/$month/$day/contract"
+        val contractFolder = File(contractFolderPath)
+
+        if (!contractFolder.exists() || !contractFolder.isDirectory) {
+            throw ContractNotFound()
+        }
+
+        val docxFiles = contractFolder.listFiles { file -> file.extension == "docx" } ?: emptyArray()
+
+        if (docxFiles.isEmpty()) {
+            return ResponseEntity.accepted().body<Any>(null)
+        }
+        val pdfPath = "${attachmentMapper.filePath}/pdf"
+        val file = File(pdfPath)
+        if (!file.exists()) {
+            file.mkdirs()
+        }
+
+        val pdfFiles = mutableListOf<File>()
+        for (docxFile in docxFiles) {
+            convertDocxToPdf(docxFile.absolutePath, pdfPath)
+            pdfFiles.add(File("${pdfPath}/${docxFile.nameWithoutExtension}.pdf"))
+        }
+
+        return createZipFile(pdfFiles)
     }
 
     private fun replaceKeysWithStyles(docxFile: File, keys: Map<String, String>): File {
@@ -148,8 +229,61 @@ class ContractServiceImpl(
 
         val replacedFile = File(docxFile.parentFile, "contract_${docxFile.name}")
         Files.newOutputStream(replacedFile.toPath()).use { wordDoc.write(it) }
+        docxFile.delete()
         return replacedFile
     }
+
+    fun convertDocxToPdf(inputFile: String, outputFileDir: String) {
+        val processBuilder = ProcessBuilder(
+            "libreoffice",
+            "--headless",
+            "--convert-to", "pdf",
+            "--outdir", outputFileDir,
+            inputFile
+        )
+
+        try {
+            val process =processBuilder.start()
+            process.waitFor()
+        } catch (e: IOException) {
+            e.printStackTrace()
+        } catch (e: InterruptedException) {
+            e.printStackTrace()
+        }
+    }
+
+    fun createZipFile(files: List<File>): ResponseEntity<*> {
+        val zipFilePath =  "${attachmentMapper.filePath}/zip/${UUID.randomUUID()}.zip"
+
+        val parentDir = File(zipFilePath).parentFile
+        if (!parentDir.exists()) {
+            parentDir.mkdirs()
+        }
+        val zipFile = File(zipFilePath)
+
+        try {
+            ZipOutputStream(BufferedOutputStream(FileOutputStream(zipFile))).use { zipOut ->
+                for (file in files) {
+                    if (file.exists()) {
+                        FileInputStream(file).use { input ->
+                            val entry = ZipEntry(file.name)
+                            zipOut.putNextEntry(entry)
+                            input.copyTo(zipOut)
+                        }
+                    }
+                }
+            }
+        } catch (e: IOException) {
+            e.printStackTrace()
+        }
+
+        val resource = InputStreamResource(FileInputStream(zipFile))
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"${zipFile.name}\"")
+            .contentType(MediaType.APPLICATION_OCTET_STREAM)
+            .body(resource)
+    }
+
 
     private fun replaceTextInRuns(runs: List<XWPFRun>, keys: Map<String, String>) {
         runs.forEach { run ->
@@ -228,11 +362,9 @@ class TemplateServiceImpl(
     private val keyService: KeyService,
     private val keyRepository: KeyRepository,
     private val templateMapper: TemplateMapper,
-    private val attachmentMapper: AttachmentMapper,
     private val attachmentService: AttachmentService,
     private val templateRepository: TemplateRepository,
-    private val organizationRepository: OrganizationRepository,
-    userRepository: UserRepository
+    //private val attachment: AttachmentMapper
 ) : TemplateService {
 
     override fun getAll(page: Int, size: Int): Page<TemplateResponse> {
@@ -253,16 +385,19 @@ class TemplateServiceImpl(
         } ?: throw KeyNotFoundException()
     }
 
+
     override fun create(organizationId: Long, multipartFile: MultipartFile) {
-        //val organizationId = getCurrentOrganizationId()
         val organization = organizationRepository.findById(organizationId)
             .orElseThrow { OrganizationNotFoundException() }
 
-        val attachmentInfo = attachmentService.upload(multipartFile)
-        val attachment = attachmentService.findById(attachmentInfo.id)
-
         val templateName = multipartFile.originalFilename?.substringBeforeLast(".")
             ?: throw InvalidTemplateNameException()
+
+        if (templateRepository.existsByTemplateNameAndOrganizationId(templateName, organizationId)) {
+            throw TemplateAlreadyExistsException()
+        }
+        val attachmentInfo = attachmentService.upload(multipartFile)
+        val attachment = attachmentService.findById(attachmentInfo.id)
 
         val extractedKeys = extractKeysFromFile(attachmentInfo)
 
@@ -273,26 +408,13 @@ class TemplateServiceImpl(
             } else {
                 val keyCreateRequest = KeyCreateRequest(key = keyString)
                 keyService.create(keyCreateRequest)
-                keyRepository.findByKeyAndDeletedFalse(keyString)
-                    ?: throw KeyAlreadyExistsException()
+                keyRepository.findByKeyAndDeletedFalse(keyString) ?: throw KeyAlreadyExistsException()
             }
         }
-        val template = templateMapper.toEntity(templateName,attachment,keyEntities,organization)
+
+        val template = templateMapper.toEntity(templateName, attachment, keyEntities, organization)
         templateRepository.save(template)
     }
-
-//    private fun getCurrentOrganizationId(): Long {
-//        val authentication = SecurityContextHolder.getContext().authentication
-//        if (authentication != null && authentication.isAuthenticated) {
-//            val principal = authentication.principal as? User
-//            val organizationId = principal?.organization?.firstOrNull()?.id
-//                ?: throw OrganizationNotFoundException()
-//            return organizationId
-//        } else {
-//            throw UnauthorizedException()
-//        }
-//    }
-
 
     private fun extractKeysFromFile(attachmentInfo: AttachmentInfo): List<String> {
         val regex = Regex("\\$([a-zA-Z0-9]+)\\$")
@@ -313,6 +435,8 @@ class TemplateServiceImpl(
     }
 
 
+
+      @Transaction
     override fun update(templateId: Long, multipartFile: MultipartFile) {
         val existingTemplate = templateRepository.findByIdAndDeletedFalse(templateId)
             ?: throw TemplateNotFoundException()
@@ -332,9 +456,15 @@ class TemplateServiceImpl(
             val keyCreateRequest = KeyCreateRequest(key = keyString)
             keyService.create(keyCreateRequest)
             keyRepository.findByKeyAndDeletedFalse(keyString)
-                ?: throw RuntimeException("Kalit yaratishdan keyin topilmadi: $keyString")
+                ?: throw KeyAlreadyExistsException()
         }
         val allKeys = existingKeys + newKeys
+
+        val oldFileName = existingTemplate.templateName
+        val newFileName = multipartFile.originalFilename?.substringBeforeLast(".")
+        if (oldFileName != null && newFileName != null &&  oldFileName == newFileName) {
+            attachmentService.delete(existingTemplate.file.id!!)
+        }
 
         val updatedTemplate = existingTemplate.apply {
             this.templateName = updatedTemplateName
@@ -364,28 +494,23 @@ class UserServiceImpl(
     }
 
     override fun existsUserData(passportId: String, phoneNumber: String) {
-        if (userRepository.existsByPassportId(passportId))
-            throw PassportIdAlreadyUsedException()
-        if (userRepository.existsByPhoneNumber(phoneNumber))
+        if (userRepository.existsByPassportIdOrPhoneNumber(passportId, phoneNumber))
             throw UserAlreadyExistsException()
     }
+
 }
 
 @Service
 class OrganizationServiceImpl(
-    private val organizationRepository: OrganizationRepository,
-    private val userRepository: UserRepository
+    private val organizationRepository: OrganizationRepository
 ): OrganizationService {
     override fun create(request: CreateOrganizationRequest) {
         existsByName(request.name)
-        var organization = Organization(
+        val organization = Organization(
             name = request.name,
             address = request.address
         )
-        organization = organizationRepository.save(organization)
-        val director = getCurrentUserId()?.id?.let { userRepository.findById(it).getOrNull() }
-        director?.organization?.add(organization)
-        userRepository.save(director!!)
+        organizationRepository.save(organization)
     }
 
     override fun update(request: UpdateOrganizationRequest) {
@@ -479,9 +604,7 @@ class AuthServiceImpl(
         tokenRepository.save(token)
     }
     private fun existsUserData(passportId: String, phoneNumber: String) {
-        if (userRepository.existsByPassportId(passportId))
-            throw PassportIdAlreadyUsedException()
-        if (userRepository.existsByPhoneNumber(phoneNumber))
+        if (userRepository.existsByPassportIdOrPhoneNumber(passportId, phoneNumber))
             throw UserAlreadyExistsException()
     }
 }
@@ -492,9 +615,11 @@ class AttachmentServiceImpl(
     private  val repository: AttachmentRepository,
     private val attachmentMapper: AttachmentMapper,
     ) : AttachmentService {
+    @Value("\${file.path}")
+    lateinit var filePath: String
   
-    override fun upload(multipartFile: MultipartFile): AttachmentInfo {
-        val entity = attachmentMapper.toEntity(multipartFile)
+    override fun upload(multipartFile: MultipartFile , subFolder : String?): AttachmentInfo {
+        val entity = attachmentMapper.toEntity(multipartFile, subFolder)
         val file = File(entity.path).apply {
             parentFile.mkdirs()
         }.absoluteFile
@@ -541,6 +666,13 @@ class AttachmentServiceImpl(
         if (attachment.isPresent) {
             return attachment.get()
         }else throw AttachmentNotFound()
+    }
+
+    @Transactional
+    override fun delete(id: Long) {
+        val file = findById(id)
+        File(file.path).delete()
+        repository.trash(id) ?: throw AttachmentNotFound()
     }
 }
 
