@@ -59,7 +59,6 @@ class SecurityConfig(
                auth -> auth
                .requestMatchers(
                    "api/v1/auth/**",
-                   "api/v1/templates/**",
                    "/v2/api-docs",
                    "/v3/api-docs",
                    "/v3/api-docs/**",
@@ -71,7 +70,6 @@ class SecurityConfig(
                    "/webjars/**",
                    "/swagger-ui.html").permitAll()
                .anyRequest().authenticated()
-
            }
            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter::class.java)
            .authenticationProvider(authenticationProvider)

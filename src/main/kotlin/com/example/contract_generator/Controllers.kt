@@ -24,11 +24,8 @@ class ExceptionHandler(private val errorMessageSource: ResourceBundleMessageSour
     fun handleAccountException(exception: GenericException): ResponseEntity<BaseMessage> {
         return ResponseEntity.badRequest().body(exception.getErrorMessage(errorMessageSource))
     }
-    @ExceptionHandler(AccessDeniedException::class)
-    fun handleAccountException(exception: AccessDeniedException): ResponseEntity<BaseMessage> {
-        return ResponseEntity.badRequest().body(BaseMessage(HttpStatus.FORBIDDEN.value(),exception.message))
-    }
 }
+
 
 @RestController
 @RequestMapping("/api/v1/keys")
@@ -74,9 +71,6 @@ class ContractController(val service:ContractService) {
     }
     @GetMapping
     fun getAll( @RequestParam("date") @JsonFormat(pattern = "yyyy-MM-dd") date: LocalDate) = service.getPdfsZip(date)
-
-    @GetMapping("/get")
-    fun getZip( @RequestParam list: List<String>) = service.getZip(list)
 
 }
     @RestController
@@ -176,12 +170,6 @@ class AttachmentController(private val service: AttachmentService) {
             return userService.createOperator(request)
         }
     }
-    @GetMapping("{organization-id}")
-    fun getAll(@Valid @PathVariable("organization-id") organizationId: Long): List<UserDto>? {
-        return userService.getAllByOrganizationId(organizationId)
-    }
-}
-
 
     @RestController
     @RequestMapping("/api/v1/organizations")
