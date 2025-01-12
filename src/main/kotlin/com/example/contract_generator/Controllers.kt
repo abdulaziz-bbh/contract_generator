@@ -59,18 +59,50 @@ class KeyController(val service: KeyService) {
 }
 
 @RestController
-@RequestMapping("/api/contracts")
-class ContractController(val service:ContractService) {
-    @PostMapping()
-    fun generate(@RequestBody @Valid request: List<ContractRequestDto>): ResponseEntity<*> {
-        return service.generateContract(request)
+@RequestMapping("api/contracts")
+class ContractController(
+    private val contractService: ContractService
+) {
+
+    @PostMapping("/{templateId}")
+    fun createContract(
+        @PathVariable templateId: Long,
+        @RequestBody list: List<ContractRequestDto>
+    ): ResponseEntity<List<ContractResponseDto>> {
+        val response = contractService.createContract(templateId, list)
+        return ResponseEntity.ok(response)
     }
-    @PutMapping("/update")
-    fun update(@RequestBody @Valid request: List<ContractUpdateDto>): ResponseEntity<*> {
-        return service.updateContract(request)
+
+    @PutMapping
+    fun updateContract(
+        @RequestBody list: List<ContractRequestDto>
+    ): ResponseEntity<Void> {
+        contractService.updateContract(list)
+        return ResponseEntity.ok().build()
     }
+
+    @DeleteMapping
+    fun deleteContracts(
+        @RequestParam contractIds: List<Long>
+    ): ResponseEntity<Void> {
+        contractService.delete(contractIds)
+        return ResponseEntity.ok().build()
+    }
+
     @GetMapping
-    fun getAll( @RequestParam("date") @JsonFormat(pattern = "yyyy-MM-dd") date: LocalDate) = service.getPdfsZip(date)
+    fun getAllContracts(
+        @RequestParam(required = false) isGenerated: Boolean?
+    ): ResponseEntity<List<ContractResponseDto>> {
+        val response = contractService.getAll(isGenerated)
+        return ResponseEntity.ok(response)
+    }
+    @GetMapping("/{contractId}")
+    fun findContractById(
+        @PathVariable contractId: Long
+    ): ResponseEntity<ContractResponseDto> {
+        val response = contractService.findById(contractId)
+        return ResponseEntity.ok(response)
+    }
 
 }
     @RestController
@@ -90,7 +122,8 @@ class ContractController(val service:ContractService) {
 
 
 
-    @PostMapping("{organization-id}",consumes = ["multipart/form-data"])
+    @PostMapping("/{organization-id}",consumes = ["multipart/form-data"])
+//    @RequestMapping("/create")
     fun create(
         @PathVariable("organization-id") organizationId: Long,
         @RequestParam("file") multipartFile: MultipartFile) = service.create(organizationId,multipartFile)

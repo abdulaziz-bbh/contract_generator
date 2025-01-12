@@ -72,6 +72,7 @@ class Key(
 
 @Entity
 class Template(
+    @Column(nullable = false) var templateName: String,
     @OneToOne var file : Attachment,
     @ManyToOne var organization: Organization,
     @ManyToMany var keys : MutableList<Key> = mutableListOf(),
@@ -79,8 +80,8 @@ class Template(
 
 @Entity
 class Contract(
-    @OneToOne val file: Attachment? = null,
     @ManyToOne val template: Template,
+    @OneToOne val file: Attachment? = null,
     @ManyToMany val operators : MutableList<User> = mutableListOf(),
     val isGenerated: Boolean = false
 
