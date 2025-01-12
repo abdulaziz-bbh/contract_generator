@@ -9,3 +9,4 @@ fun getCurrentUserId(): User? {
     }
     return null
 }
+

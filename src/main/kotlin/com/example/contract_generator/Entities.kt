@@ -58,9 +58,9 @@ class Organization(
 
 @Entity
 class Attachment(
-    @Column(nullable = false) val name: String,
+    @Column(nullable = false) var name: String,
     @Column(nullable = false) val contentType: String,
-    @Column(nullable = false) val size: Long,
+    @Column(nullable = false) var size: Long,
     @Column(nullable = false) val extension: String,
     @Column(nullable = false) val path: String
 ) : BaseEntity()
@@ -82,14 +82,14 @@ class Template(
 class Contract(
     @OneToOne val file: Attachment,
     @ManyToOne val template: Template,
-    @ManyToMany val operators : List<User>,
-    @Enumerated(EnumType.STRING) @Column(nullable = false) val status: ContractStatus
+    @ManyToMany val operators : MutableList<User> = mutableListOf(),
+    @Enumerated(EnumType.STRING) @Column(nullable = false) var status: ContractStatus = ContractStatus.COMPLETED
 
 ) : BaseEntity()
 
 @Entity
 class ContractData(
     @Column(nullable = false) val key: String,
-    @Column(nullable = false) val value: String,
+    @Column(nullable = false) var value: String,
     @ManyToOne val contract: Contract,
 ) : BaseEntity()
