@@ -98,8 +98,22 @@ data class AttachmentInfo(
 )
 
 data class ContractRequestDto(
-    val templateId: Long,
     val contractData: Map<Long,String>
+)
+
+data class ContractResponseDto(
+    val id: Long,
+    val template: TemplateResponse,
+    val attachment: AttachmentInfo?,
+    val operators: List<UserDto>,
+    val contractData: List<ContractDataDto>,
+    val isGenerated: Boolean
+)
+
+data class ContractDataDto(
+    val id: Long,
+    val key: KeyResponse,
+    val value: String
 )
 
 data class ContractUpdateDto(

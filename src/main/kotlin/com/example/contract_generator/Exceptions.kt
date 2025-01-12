@@ -90,3 +90,6 @@ class AttachmentAlreadyExists():GenericException(){
 class ContractNotFound(): GenericException(){
     override fun errorCode(): ErrorCode = ErrorCode.CONTRACT_NOT_FOUND
 }
+class ContractDataNotFound(): GenericException(){
+    override fun errorCode(): ErrorCode = ErrorCode.CONTRACT_DATA_NOT_FOUND
+}
