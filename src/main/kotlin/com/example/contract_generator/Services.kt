@@ -97,7 +97,7 @@ class ContractServiceImpl(
     override fun createContract(templateId: Long, list: List<ContractRequestDto>): List<ContractResponseDto> {
         val template: Template = templateRepository.findByIdAndDeletedFalse(templateId)
             ?: throw TemplateNotFoundException()
-        val currentUser = getCurrentUserId()
+        val currentUser = getCurrentUserId()?:throw UserNotFoundException()
 
         var responseDtos = mutableListOf<ContractResponseDto>()
         list.map { contractRequestDto ->
@@ -108,14 +108,11 @@ class ContractServiceImpl(
             if (unresolvedKeyIds.isNotEmpty()) {
                 throw KeyNotFoundException()
             }
-
             val contract = Contract(
                 template = template,
-            )
-//            ).apply {
-//                operators.add(currentUser)
-//            }
-
+            ).apply {
+                operators.add(currentUser)
+            }
             contractRepository.save(contract)
 
             val contractDataList = keys.map { key ->
@@ -128,7 +125,6 @@ class ContractServiceImpl(
             contractDataRepository.saveAll(contractDataList)
             responseDtos.add(contractMapper.toDto(contract, contractDataList))
         }
-
         return responseDtos
     }
 
@@ -136,7 +132,6 @@ class ContractServiceImpl(
 
     @Transactional
     override fun updateContract(list: List<ContractRequestDto>){
-
         list.forEach { contractRequestDto ->
             val contractDataIds = contractRequestDto.contractData.keys
             val contractDataList = contractDataRepository.findAllByIdInAndDeletedFalse(contractDataIds.toList())
@@ -145,16 +140,13 @@ class ContractServiceImpl(
             if (unresolvedDataIds.isNotEmpty()) {
                 throw ContractDataNotFound()
             }
-
             contractDataList.forEach { contractData ->
                 val newValue = contractRequestDto.contractData[contractData.id]
                 if (newValue != null) {
                     contractData.value = newValue
                 }
             }
-
             contractDataRepository.saveAll(contractDataList)
-
         }
     }
 
@@ -216,7 +208,6 @@ class ContractServiceImpl(
     @Transactional
     override fun delete(contractIds: List<Long>) {
         val trashedContracts = contractRepository.trashList(contractIds)
-
         if (trashedContracts.any { it == null }) {
             throw ContractNotFound()
         }
@@ -234,7 +225,6 @@ class ContractServiceImpl(
         } else {
             contractRepository.findAllNotDeleted()
         }
-
         return contracts.map { contract ->
             contractMapper.toDto(contract, contractDataRepository.findAllByContract(contract))
         }
