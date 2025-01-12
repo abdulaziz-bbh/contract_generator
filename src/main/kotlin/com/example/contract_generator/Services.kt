@@ -17,7 +17,6 @@ import org.apache.poi.xwpf.usermodel.XWPFRun
 import org.springframework.http.HttpHeaders
 import org.springframework.security.authentication.AuthenticationManager
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
-import org.springframework.security.core.userdetails.UserDetails
 import org.springframework.security.core.userdetails.UserDetailsService
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.web.multipart.MultipartFile
@@ -34,6 +33,7 @@ import java.util.zip.ZipOutputStream
 interface UserService{
     fun createOperator(request: CreateOperatorRequest)
     fun existsUserData(passportId: String, phoneNumber: String)
+    fun getAllByOrganizationId(organizationId: Long):List<UserDto>?
 }
 interface AuthService{
     fun registration(request: CreateDirectorRequest)
@@ -42,7 +42,7 @@ interface AuthService{
 }
 interface OrganizationService{
     fun create(request: CreateOrganizationRequest)
-    fun update(request: UpdateOrganizationRequest)
+    fun update(request: UpdateOrganizationRequest, id: Long)
     fun existsByName(name: String)
 }
 
@@ -521,6 +521,10 @@ class UserServiceImpl(
             throw UserAlreadyExistsException()
     }
 
+    override fun getAllByOrganizationId(organizationId: Long): List<UserDto>? {
+        return userRepository.findByOrganizationId(organizationId)?.map { userMapper.toDto(it) }
+    }
+
 }
 
 @Service
@@ -536,8 +540,7 @@ class OrganizationServiceImpl(
         organizationRepository.save(organization)
     }
 
-    override fun update(request: UpdateOrganizationRequest) {
-        TODO("Not yet implemented")
+    override fun update(request: UpdateOrganizationRequest, id: Long) {
     }
 
     override fun existsByName(name: String) {
@@ -550,7 +553,7 @@ class OrganizationServiceImpl(
 
 @Service
 class CustomUserDetailsService(private val userRepository: UserRepository) : UserDetailsService {
-    override fun loadUserByUsername(username: String?): UserDetails {
+    override fun loadUserByUsername(username: String?): User {
         if(username.isNullOrBlank() || username.isBlank())
             throw UsernameInvalidException()
         return userRepository.findByPhoneNumber(username) ?: throw UserNotFoundException()
@@ -562,7 +565,8 @@ class AuthServiceImpl(
     private val userRepository: UserRepository,
     private val tokenRepository: TokenRepository,
     private val jwtProvider: JwtProvider,
-    private val userMapper: UserMapper
+    private val userMapper: UserMapper,
+    private val userDetailsService: CustomUserDetailsService
 ) : AuthService {
 
     override fun registration(request: CreateDirectorRequest) {
@@ -575,7 +579,7 @@ class AuthServiceImpl(
             throw UsernameInvalidException()
         authenticationManager.authenticate(
             UsernamePasswordAuthenticationToken(request.username, request.password))
-        val user = userRepository.findByPhoneNumber(request.username) ?: throw UserNotFoundException()
+        val user = userDetailsService.loadUserByUsername(request.username)
         val accessToken = jwtProvider.generateAccessToken(user)
         val refreshToken = jwtProvider.generateRefreshToken(user)
         saveToken(user, accessToken)

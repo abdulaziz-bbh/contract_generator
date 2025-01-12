@@ -66,7 +66,7 @@ data class UserDto(
     val fullName: String,
     val role: Role,
     val phoneNumber: String,
-    val passportId: String,
+    val passportId: String
 )
 
 data class LoginRequest(
@@ -83,9 +83,9 @@ data class CreateOrganizationRequest(
     @field:NotNull val name: String,
     @field:NotNull val address: String,
 )
-
 data class UpdateOrganizationRequest(
-    val name: String,
+    val name: String?,
+    val address: String?
 )
 
 data class AttachmentInfo(
