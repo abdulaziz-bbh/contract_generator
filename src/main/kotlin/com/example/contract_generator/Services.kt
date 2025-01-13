@@ -485,18 +485,22 @@ class TemplateServiceImpl(
         val existingTemplate = templateRepository.findByIdAndDeletedFalse(templateId)
             ?: throw TemplateNotFoundException()
 
-        val updatedAttachmentInfo = attachmentService.upload(multipartFile)
-        val updatedAttachment = attachmentService.findById(updatedAttachmentInfo.id)
-
         val updatedTemplateName = multipartFile.originalFilename?.substringBeforeLast(".")
             ?: existingTemplate.templateName
 
-//        val existingTemplateWithName = templateRepository.findByTemplateNameWithOrganizationIdAndDeletedFalse(updatedTemplateName, organizationId)
-//        if (existingTemplateWithName != null && existingTemplateWithName.id != templateId) {
-//            updatedTemplateName = "${updatedTemplateName}_${System.currentTimeMillis()}"
-//        }
-        val extractedKeys = extractKeysFromFile(updatedAttachmentInfo)
+        val existingTemplateWithSameName = templateRepository.findByTemplateNameWithOrganizationIdAndDeletedFalse(
+            updatedTemplateName, organizationId)
+        if (existingTemplateWithSameName != null && existingTemplateWithSameName.id != templateId) {
+            throw TemplateAlreadyExistsException()
+        }
+        val updatedAttachmentInfo = attachmentService.upload(multipartFile)
+        val updatedAttachment = attachmentService.findById(updatedAttachmentInfo.id)
 
+        if (existingTemplate.file.id != null) {
+            attachmentService.delete(existingTemplate.file.id!!)
+        }
+
+        val extractedKeys = extractKeysFromFile(updatedAttachmentInfo)
         val existingKeys = keyRepository.findAllByKeyInAndDeletedFalse(extractedKeys)
         val existingKeyStrings = existingKeys.map { it.key }.toSet()
 
@@ -507,12 +511,6 @@ class TemplateServiceImpl(
                 ?: throw KeyAlreadyExistsException()
         }
         val allKeys = existingKeys + newKeys
-
-        val oldFileName = existingTemplate.templateName
-        val newFileName = multipartFile.originalFilename?.substringBeforeLast(".")
-        if (newFileName != null &&  oldFileName == newFileName) {
-            attachmentService.delete(existingTemplate.file.id!!)
-        }
 
         val updatedTemplate = existingTemplate.apply {
             this.templateName = updatedTemplateName
