@@ -16,6 +16,7 @@ import org.springframework.security.authentication.AuthenticationManager
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.userdetails.UserDetailsService
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.data.domain.Sort
 import org.springframework.web.multipart.MultipartFile
 import java.io.*
 import java.nio.file.Files
@@ -346,13 +347,14 @@ class KeyServiceImpl(
 ) : KeyService {
 
     override fun getAll(page: Int, size: Int): Page<KeyResponse> {
-        val pageable: Pageable = PageRequest.of(page, size)
+        val pageable: Pageable = PageRequest.of(page, size, Sort.by(Sort.Order.desc("createdAt")))
         val usersPage = keyRepository.findAllNotDeletedForPageable(pageable)
         return usersPage.map { keyMapper.toDto(it) }
     }
 
     override fun getAll(): List<KeyResponse> {
-        return keyRepository.findAllNotDeleted().map {
+        val sortedKeys = keyRepository.findAllNotDeleted().sortedByDescending { it.createdAt }
+        return sortedKeys.map {
             keyMapper.toDto(it)
         }
     }
@@ -399,13 +401,14 @@ class TemplateServiceImpl(
 ) : TemplateService {
 
     override fun getAll(page: Int, size: Int): Page<TemplateResponse> {
-        val pageable: Pageable = PageRequest.of(page, size)
+        val pageable: Pageable = PageRequest.of(page, size, Sort.by(Sort.Order.desc("createdAt")))
         val usersPage = templateRepository.findAllNotDeletedForPageable(pageable)
         return usersPage.map { templateMapper.toDto(it) }
     }
 
     override fun getAll(): List<TemplateResponse> {
-        return templateRepository.findAllNotDeleted().map {
+        val sortedTemplates = templateRepository.findAllNotDeleted().sortedByDescending { it.createdAt }
+        return sortedTemplates.map {
             templateMapper.toDto(it)
         }
     }
@@ -418,7 +421,8 @@ class TemplateServiceImpl(
 
     override fun getTemplatesByOrganization(organizationId: Long): List<TemplateResponse> {
         val templates = templateRepository.findByOrganizationIdAndDeletedFalse(organizationId)
-        return templates.map { templateMapper.toDto(it) }
+        val sortedTemplates = templates.sortedByDescending { it.createdAt }
+        return sortedTemplates.map { templateMapper.toDto(it) }
     }
 
     override fun create(organizationId: Long, multipartFile: MultipartFile): TemplateDto {
