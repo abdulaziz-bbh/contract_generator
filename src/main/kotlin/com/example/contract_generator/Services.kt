@@ -423,6 +423,13 @@ class TemplateServiceImpl(
         val organization = organizationRepository.findById(organizationId)
             .orElseThrow { OrganizationNotFoundException() }
 
+        val allowedExtensions = listOf("doc", "docx")
+        val originalFilename = multipartFile.originalFilename
+            ?: throw InvalidFileFormatException()
+        val fileExtension = originalFilename.substringAfterLast(".", "").lowercase()
+        if (fileExtension !in allowedExtensions) {
+            throw InvalidFileFormatException()
+        }
         val templateName = multipartFile.originalFilename?.substringBeforeLast(".")
             ?: throw InvalidTemplateNameException()
 

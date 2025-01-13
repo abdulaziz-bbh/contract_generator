@@ -23,7 +23,8 @@ enum class ErrorCode(val code: Int) {
     INVALID_TEMPLATE_NAME(77),
     CONTRACT_NOT_FOUND(80),
     BAD_REQUEST(81),
-    CONTRACT_DATA_NOT_FOUND(90)
+    CONTRACT_DATA_NOT_FOUND(90),
+    INVALID_FILE_FORMAT(91)
     }
 
 enum class Role(private var permissions: MutableSet<Permission>) {

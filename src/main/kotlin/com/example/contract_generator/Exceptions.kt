@@ -55,6 +55,12 @@ class TemplateNotFoundException : GenericException() {
     }
 }
 
+class InvalidFileFormatException : GenericException() {
+    override fun errorCode(): ErrorCode {
+        return ErrorCode.INVALID_FILE_FORMAT
+    }
+}
+
 class InvalidTemplateNameException : GenericException() {
     override fun errorCode(): ErrorCode {
         return ErrorCode.INVALID_TEMPLATE_NAME
