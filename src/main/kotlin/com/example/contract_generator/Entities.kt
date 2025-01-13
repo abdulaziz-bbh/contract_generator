@@ -26,9 +26,8 @@ abstract class BaseEntity(
 class User(
     @Column(nullable = false) var fullName: String,
     @Column(nullable = false) var phoneNumber: String,
-    @Column(nullable = false) val passportId: String,
+    @Column(nullable = false) var passportId: String,
     @Column(nullable = false) var passWord: String,
-    @ManyToMany val organization: MutableList<Organization>? = null,
     @Enumerated(EnumType.STRING) @Column(nullable = false) val role: Role
 ) : BaseEntity(), UserDetails {
 
@@ -46,6 +45,16 @@ class User(
 class Organization(
     @Column(nullable = false) var name: String,
     @Column(nullable = false) var address: String
+) : BaseEntity()
+
+@Entity
+class UsersOrganization(
+
+    @ManyToOne val user: User,
+    @ManyToOne val organization: Organization,
+    var isCurrentUser: Boolean,
+    var leftDate: Date? = null
+
 ) : BaseEntity()
 
 @Entity

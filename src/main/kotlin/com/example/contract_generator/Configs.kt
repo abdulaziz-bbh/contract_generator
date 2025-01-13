@@ -57,22 +57,10 @@ class SecurityConfig(
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain? {
        http
            .csrf{it.disable()}
-//           .cors{it.disable()}
            .authorizeHttpRequests{
                auth -> auth
                .requestMatchers(
-                   "api/**",
-//                   "api/v1/auth/**",
-//                   "/v2/api-docs",
-//                   "/v3/api-docs",
-//                   "/v3/api-docs/**",
-//                   "/swagger-resources",
-//                   "/swagger-resources/**",
-//                   "/configuration/ui",
-//                   "/configuration/security",
-//                   "/swagger-ui/**",
-//                   "/webjars/**",
-                   "/swagger-ui.html").permitAll()
+                   "api/v1/auth/**").permitAll()
                .requestMatchers("/api/v1/templates/**").hasAnyRole(Role.DIRECTOR.name)
                .anyRequest().authenticated()
            }
@@ -116,7 +104,7 @@ class AuthConfig(
 
 @Configuration
 @EnableJpaAuditing
-class AppConfiguration() : AuditorAware<Long> {
+class AppConfiguration : AuditorAware<Long> {
 
     override fun getCurrentAuditor(): Optional<Long> {
         return Optional.ofNullable(getCurrentUserId()?.id)

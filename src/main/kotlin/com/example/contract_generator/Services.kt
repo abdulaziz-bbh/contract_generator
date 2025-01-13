@@ -10,20 +10,16 @@ import org.springframework.data.domain.Pageable
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.stereotype.Service
-import com.fasterxml.jackson.databind.ObjectMapper
-import jakarta.servlet.http.HttpServletRequest
-import jakarta.servlet.http.HttpServletResponse
 import org.apache.poi.xwpf.usermodel.XWPFRun
 import org.springframework.http.HttpHeaders
 import org.springframework.security.authentication.AuthenticationManager
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.userdetails.UserDetailsService
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.data.domain.Sort
 import org.springframework.web.multipart.MultipartFile
 import java.io.*
 import java.nio.file.Files
-import java.nio.file.Paths
-import java.nio.file.StandardCopyOption
 import java.time.LocalDate
 import java.util.*
 import java.util.zip.ZipEntry
@@ -32,7 +28,9 @@ import java.util.zip.ZipOutputStream
 
 interface UserService{
     fun createOperator(request: CreateOperatorRequest)
+    fun updateOperator(request: UpdateOperatorRequest, id: Long)
     fun existsUserData(passportId: String, phoneNumber: String)
+    fun dismissal (operatorId: Long, organizationId: Long)
     fun getAllByOrganizationId(organizationId: Long):List<UserDto>?
 }
 interface AuthService{
@@ -44,6 +42,7 @@ interface OrganizationService{
     fun create(request: CreateOrganizationRequest)
     fun update(request: UpdateOrganizationRequest, id: Long)
     fun existsByName(name: String)
+    fun getAll(directorId: Long): List<OrganizationDto>
 }
 
 interface KeyService {
@@ -59,9 +58,10 @@ interface TemplateService {
     fun getAll(page: Int, size: Int): Page<TemplateResponse>
     fun getAll(): List<TemplateResponse>
     fun getOne(id: Long): TemplateResponse
+    fun getTemplatesByOrganization(organizationId: Long): List<TemplateResponse>
     fun create( organizationId: Long, multipartFile: MultipartFile): TemplateDto
     fun delete(id: Long)
-    fun update(templateId: Long, multipartFile: MultipartFile)
+    fun update(templateId: Long, organizationId: Long, multipartFile: MultipartFile)
 }
 
 interface AttachmentService {
@@ -349,13 +349,14 @@ class KeyServiceImpl(
 ) : KeyService {
 
     override fun getAll(page: Int, size: Int): Page<KeyResponse> {
-        val pageable: Pageable = PageRequest.of(page, size)
+        val pageable: Pageable = PageRequest.of(page, size, Sort.by(Sort.Order.desc("createdAt")))
         val usersPage = keyRepository.findAllNotDeletedForPageable(pageable)
         return usersPage.map { keyMapper.toDto(it) }
     }
 
     override fun getAll(): List<KeyResponse> {
-        return keyRepository.findAllNotDeleted().map {
+        val sortedKeys = keyRepository.findAllNotDeleted().sortedByDescending { it.createdAt }
+        return sortedKeys.map {
             keyMapper.toDto(it)
         }
     }
@@ -402,13 +403,14 @@ class TemplateServiceImpl(
 ) : TemplateService {
 
     override fun getAll(page: Int, size: Int): Page<TemplateResponse> {
-        val pageable: Pageable = PageRequest.of(page, size)
+        val pageable: Pageable = PageRequest.of(page, size, Sort.by(Sort.Order.desc("createdAt")))
         val usersPage = templateRepository.findAllNotDeletedForPageable(pageable)
         return usersPage.map { templateMapper.toDto(it) }
     }
 
     override fun getAll(): List<TemplateResponse> {
-        return templateRepository.findAllNotDeleted().map {
+        val sortedTemplates = templateRepository.findAllNotDeleted().sortedByDescending { it.createdAt }
+        return sortedTemplates.map {
             templateMapper.toDto(it)
         }
     }
@@ -419,11 +421,23 @@ class TemplateServiceImpl(
         } ?: throw KeyNotFoundException()
     }
 
+    override fun getTemplatesByOrganization(organizationId: Long): List<TemplateResponse> {
+        val templates = templateRepository.findByOrganizationIdAndDeletedFalse(organizationId)
+        val sortedTemplates = templates.sortedByDescending { it.createdAt }
+        return sortedTemplates.map { templateMapper.toDto(it) }
+    }
 
     override fun create(organizationId: Long, multipartFile: MultipartFile): TemplateDto {
         val organization = organizationRepository.findById(organizationId)
             .orElseThrow { OrganizationNotFoundException() }
 
+        val allowedExtensions = listOf("doc", "docx")
+        val originalFilename = multipartFile.originalFilename
+            ?: throw InvalidFileFormatException()
+        val fileExtension = originalFilename.substringAfterLast(".", "").lowercase()
+        if (fileExtension !in allowedExtensions) {
+            throw InvalidFileFormatException()
+        }
         val templateName = multipartFile.originalFilename?.substringBeforeLast(".")
             ?: throw InvalidTemplateNameException()
 
@@ -470,18 +484,26 @@ class TemplateServiceImpl(
         return keys
     }
 
-    override fun update(templateId: Long, multipartFile: MultipartFile) {
+    override fun update(templateId: Long, organizationId: Long, multipartFile: MultipartFile) {
         val existingTemplate = templateRepository.findByIdAndDeletedFalse(templateId)
             ?: throw TemplateNotFoundException()
-
-        val updatedAttachmentInfo = attachmentService.upload(multipartFile)
-        val updatedAttachment = attachmentService.findById(updatedAttachmentInfo.id)
 
         val updatedTemplateName = multipartFile.originalFilename?.substringBeforeLast(".")
             ?: existingTemplate.templateName
 
-        val extractedKeys = extractKeysFromFile(updatedAttachmentInfo)
+        val existingTemplateWithSameName = templateRepository.findByTemplateNameWithOrganizationIdAndDeletedFalse(
+            updatedTemplateName, organizationId)
+        if (existingTemplateWithSameName != null && existingTemplateWithSameName.id != templateId) {
+            throw TemplateAlreadyExistsException()
+        }
+        val updatedAttachmentInfo = attachmentService.upload(multipartFile)
+        val updatedAttachment = attachmentService.findById(updatedAttachmentInfo.id)
 
+        if (existingTemplate.file.id != null) {
+            attachmentService.delete(existingTemplate.file.id!!)
+        }
+
+        val extractedKeys = extractKeysFromFile(updatedAttachmentInfo)
         val existingKeys = keyRepository.findAllByKeyInAndDeletedFalse(extractedKeys)
         val existingKeyStrings = existingKeys.map { it.key }.toSet()
 
@@ -492,12 +514,6 @@ class TemplateServiceImpl(
                 ?: throw KeyAlreadyExistsException()
         }
         val allKeys = existingKeys + newKeys
-
-        val oldFileName = existingTemplate.templateName
-        val newFileName = multipartFile.originalFilename?.substringBeforeLast(".")
-        if (oldFileName != null && newFileName != null &&  oldFileName == newFileName) {
-            attachmentService.delete(existingTemplate.file.id!!)
-        }
 
         val updatedTemplate = existingTemplate.apply {
             this.templateName = updatedTemplateName
@@ -518,38 +534,93 @@ class TemplateServiceImpl(
 @Service
 class UserServiceImpl(
     private val userRepository: UserRepository,
-    private val userMapper: UserMapper
+    private val userMapper: UserMapper,
+    private val organizationRepository: OrganizationRepository,
+    private val usersOrganizationRepository: UsersOrganizationRepository
 ): UserService {
 
+    @Transactional
     override fun createOperator(request: CreateOperatorRequest) {
         existsUserData(request.passportId, request.phoneNumber)
-        userRepository.save(userMapper.toEntity(request))
+        val operator = userRepository.save(userMapper.toEntity(request))
+        val usersOrganization = UsersOrganization(
+            user = operator,
+            organization = organizationRepository.findByIdAndDeletedFalse(request.organizationId)
+                ?: throw OrganizationNotFoundException(),
+            isCurrentUser = true
+        )
+        usersOrganizationRepository.save(usersOrganization)
+    }
+
+    override fun updateOperator(request: UpdateOperatorRequest, id: Long) {
+     val user =  id.let {
+            userRepository.findByIdAndDeletedFalse(it)?: throw  UserNotFoundException()
+        }
+        request.passportId.let {
+            if (it != null) {
+                if (userRepository.findByPassportId(it, id) != null) {
+                    throw PassportIdAlreadyUsedException()
+                }
+            }
+        }
+        request.phoneNumber.let {
+            if (it != null) {
+                if (userRepository.findByPhoneNumber(it, id) != null) {
+                    throw UserAlreadyExistsException()
+                }
+            }
+        }
+        userRepository.save(userMapper.fromUpdateDto(request, user ))
     }
 
     override fun existsUserData(passportId: String, phoneNumber: String) {
         if (userRepository.existsByPassportId(passportId))
-            throw UserAlreadyExistsException()
+            throw PassportIdAlreadyUsedException()
         if(userRepository.existsByPhoneNumber(phoneNumber))
             throw UserAlreadyExistsException()
     }
 
-    override fun getAllByOrganizationId(organizationId: Long): List<UserDto>? {
-        return userRepository.findByOrganizationId(organizationId)?.map { userMapper.toDto(it) }
+    override fun dismissal(operatorId: Long, organizationId: Long) {
+        operatorId.let {
+            userRepository.findByIdAndDeletedFalse(it)?: throw  UserNotFoundException()
+        }
+        organizationId.let {
+            organizationRepository.findByIdAndDeletedFalse(it)?: throw OrganizationNotFoundException()
+        }
+        val usersOrganization = usersOrganizationRepository.findByOrganizationIdAndUserId(organizationId, operatorId)?: throw UserNotFoundException()
+        usersOrganization.isCurrentUser = false
+        usersOrganization.leftDate = Date(System.currentTimeMillis())
+        usersOrganizationRepository.save(usersOrganization)
     }
 
+    override fun getAllByOrganizationId(organizationId: Long): List<UserDto>? {
+        return usersOrganizationRepository.findUsersByOrganizationId(organizationId)?.map { userMapper.toDto(it) }
+    }
 }
 
 @Service
 class OrganizationServiceImpl(
-    private val organizationRepository: OrganizationRepository
+    private val organizationRepository: OrganizationRepository,
+    private val userRepository: UserRepository,
+    private val usersOrganizationRepository: UsersOrganizationRepository,
+    private val organizationMapper: OrganizationMapper
 ): OrganizationService {
+
+    @Transactional
     override fun create(request: CreateOrganizationRequest) {
         existsByName(request.name)
-        val organization = Organization(
+        var organization = Organization(
             name = request.name,
             address = request.address
         )
-        organizationRepository.save(organization)
+        organization = organizationRepository.save(organization)
+        val usersOrganization = UsersOrganization(
+            user = userRepository.findByIdAndDeletedFalse(getCurrentUserId()!!.id!!)
+                ?: throw UserNotFoundException(),
+            organization = organization,
+            isCurrentUser = true
+        )
+        usersOrganizationRepository.save(usersOrganization)
     }
 
     override fun update(request: UpdateOrganizationRequest, id: Long) {
@@ -559,6 +630,15 @@ class OrganizationServiceImpl(
         name.let {
             if(organizationRepository.existsByName(name))
                 throw OrganizationAlreadyExistsException()
+        }
+    }
+
+    override fun getAll(directorId: Long): List<OrganizationDto> {
+        directorId.let {
+            userRepository.findByIdAndDeletedFalse(directorId)?: throw  UserNotFoundException()
+        }
+        return usersOrganizationRepository.findAllOrganizationByUserId(directorId).map {
+            organizationMapper.toDto(it)
         }
     }
 }

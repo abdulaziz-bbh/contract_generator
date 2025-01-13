@@ -9,6 +9,17 @@ import org.springframework.stereotype.Component
 import java.io.File
 
 @Component
+class OrganizationMapper{
+
+    fun toDto(organization: Organization): OrganizationDto {
+        return OrganizationDto(
+            id = organization.id!!,
+            name = organization.name,
+            address = organization.address,
+        )
+    }
+}
+@Component
 class KeyMapper {
 
     fun toDto(key: Key): KeyResponse {
@@ -159,7 +170,6 @@ class AttachmentMapper {
 
 @Component
 class UserMapper(
-    private val organizationRepository: OrganizationRepository,
     private val passwordEncoder: BCryptPasswordEncoder,
 ) {
     fun toEntity(request: CreateDirectorRequest): User {
@@ -178,12 +188,9 @@ class UserMapper(
             phoneNumber = request.phoneNumber,
             passWord = passwordEncoder.encode(request.password),
             passportId = request.passportId,
-            role = Role.OPERATOR,
-            organization = mutableListOf(
-                organizationRepository.findByIdAndDeletedFalse(request.organizationId)
-                    ?: throw OrganizationNotFoundException()
+            role = Role.OPERATOR
             )
-        )
+
     }
     fun toDto(entity: User): UserDto {
         return UserDto(
@@ -193,6 +200,14 @@ class UserMapper(
             role = entity.role,
             id = entity.id
         )
+    }
+    fun fromUpdateDto(request: UpdateOperatorRequest, user: User):User{
+        request.run {
+            if (fullName != null) user.fullName = fullName
+            if (phoneNumber != null) user.phoneNumber = phoneNumber
+            if (passportId != null) user.passportId = passportId
+        }
+        return user
     }
 }
 

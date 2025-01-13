@@ -55,6 +55,12 @@ class TemplateNotFoundException : GenericException() {
     }
 }
 
+class InvalidFileFormatException : GenericException() {
+    override fun errorCode(): ErrorCode {
+        return ErrorCode.INVALID_FILE_FORMAT
+    }
+}
+
 class InvalidTemplateNameException : GenericException() {
     override fun errorCode(): ErrorCode {
         return ErrorCode.INVALID_TEMPLATE_NAME
@@ -67,6 +73,9 @@ class OrganizationAlreadyExistsException: GenericException() {
 
 class OrganizationNotFoundException: GenericException() {
     override fun errorCode(): ErrorCode = ErrorCode.ORGANIZATION_NOT_FOUND
+}
+class NotFoundOperatorOrOrganizationException: GenericException() {
+    override fun errorCode(): ErrorCode = ErrorCode.NOT_FOUND_OPERATOR_IN_ORGANIZATION
 }
 class UserAlreadyExistsException: GenericException() {
     override fun errorCode(): ErrorCode = ErrorCode.USER_ALREADY_EXISTS
