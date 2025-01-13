@@ -104,3 +104,12 @@ class ContractNotFound(): GenericException(){
 class ContractDataNotFound(): GenericException(){
     override fun errorCode(): ErrorCode = ErrorCode.CONTRACT_DATA_NOT_FOUND
 }
+class DuplicateKey:GenericException(){
+    override fun errorCode(): ErrorCode = ErrorCode.DUPLICATE_KEY
+}
+class DuplicateContract:GenericException(){
+    override fun errorCode(): ErrorCode = ErrorCode.DUPLICATE_CONTRACT
+}
+class MissingTemplateKeys:GenericException(){
+    override fun errorCode(): ErrorCode = ErrorCode.MISSING_TEMPLATE_KEY
+}

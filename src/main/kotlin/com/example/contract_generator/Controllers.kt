@@ -63,6 +63,19 @@ class KeyController(val service: KeyService) {
     @DeleteMapping("{id}")
     fun delete(@PathVariable id: Long) = service.delete(id)
 }
+@RestController
+@RequestMapping("api/job")
+class JobController(private val jobService: JobService) {
+
+    @GetMapping("/{isDoc}")
+    fun generateContract(@RequestParam contractIds: List<Long>,@PathVariable isDoc: Boolean): JobDto {
+        return jobService.generateContract(contractIds, isDoc)
+    }
+    @GetMapping("/status")
+    fun generateContract(@RequestParam jobIds: List<Long>): Map<JobDto,String> {
+        return jobService.getStatus(jobIds)
+    }
+}
 
 @RestController
 @RequestMapping("api/contracts")
@@ -81,7 +94,7 @@ class ContractController(
 
     @PutMapping
     fun updateContract(
-        @RequestBody list: List<ContractRequestDto>
+        @RequestBody list: List<CreateContractDataDto>
     ): ResponseEntity<Void> {
         contractService.updateContract(list)
         return ResponseEntity.ok().build()
@@ -102,7 +115,6 @@ class ContractController(
         val response = contractService.getAll(isGenerated)
         return ResponseEntity.ok(response)
     }
-
     @GetMapping("/{contractId}")
     fun findContractById(
         @PathVariable contractId: Long
@@ -165,9 +177,9 @@ class AttachmentController(private val service: AttachmentService) {
     }
 
 
-    @GetMapping("/download/{id}")
-    fun downloadFile(@PathVariable id: Long): ResponseEntity<*> {
-        return service.download(id)
+    @GetMapping("/download/{hashId}")
+    fun downloadFile(@PathVariable("hashId") hashId: String): ResponseEntity<*> {
+        return service.download(hashId)
     }
 
 

@@ -26,6 +26,7 @@ repositories {
 }
 
 dependencies {
+    implementation("org.hashids:hashids:1.0.3")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-validation")

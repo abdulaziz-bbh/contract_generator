@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaAuditing
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
+import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.authentication.AuthenticationManager
 import org.springframework.security.authentication.AuthenticationProvider
@@ -74,6 +75,18 @@ class SecurityConfig(
                it.authenticationEntryPoint(authenticationEntryPoint)
            }
         return http.build()
+    }
+}
+
+@Component
+class JobRunning(private val jobService: JobService,
+    private val jobRepository: JobRepository,){
+    @Scheduled(fixedRate = 3_000)
+    fun schedulePendingJobs() {
+        val pendingJobs = jobRepository.findAllByStatus(JobStatus.PENDING)
+        pendingJobs.forEach { job ->
+            jobService.generateZip(job)
+        }
     }
 }
 
