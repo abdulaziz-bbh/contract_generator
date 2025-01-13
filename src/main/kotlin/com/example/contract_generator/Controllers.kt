@@ -207,6 +207,19 @@ class AttachmentController(private val service: AttachmentService) {
         fun create(@RequestBody @Valid request: CreateOperatorRequest) {
             return userService.createOperator(request)
         }
+        @PutMapping("/{id}")
+        fun update(@RequestBody @Valid request: UpdateOperatorRequest, @PathVariable("id") id: Long) {
+            return userService.updateOperator(request, id)
+        }
+
+        @PutMapping("dismissal/{operator-id}/{organization-id}")
+        fun dismissal(@PathVariable("operator-id") operatorId: Long, @PathVariable("organization-id") organizationId: Long) {
+            return userService.dismissal(operatorId, organizationId)
+        }
+        @GetMapping("get-all/{organization-id}")
+        fun getOrganizations(@PathVariable("organization-id") organizationId: Long): List<UserDto>? {
+            return userService.getAllByOrganizationId(organizationId)
+        }
     }
 
     @RestController
@@ -219,5 +232,6 @@ class AttachmentController(private val service: AttachmentService) {
         fun create(@RequestBody @Valid request: CreateOrganizationRequest) {
             organizationService.create(request)
         }
+
     }
 
