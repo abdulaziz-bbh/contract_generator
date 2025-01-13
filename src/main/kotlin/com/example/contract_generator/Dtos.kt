@@ -106,13 +106,17 @@ data class AttachmentInfo(
 )
 
 data class ContractRequestDto(
-    val contractData: Map<Long,String>
+    val contractData: List<CreateContractDataDto>
+)
+data class CreateContractDataDto(
+    @field:NotNull val keyId: Long,
+    @field:NotNull val value: String
 )
 
 data class ContractResponseDto(
     val id: Long,
-    val template: TemplateResponse,
-    val attachment: AttachmentInfo?,
+    val templateId: Long,
+//    val attachment: AttachmentInfo?,
     val operators: List<UserDto>,
     val contractData: List<ContractDataDto>,
     val isGenerated: Boolean

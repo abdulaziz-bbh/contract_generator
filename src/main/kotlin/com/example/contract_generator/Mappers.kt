@@ -204,8 +204,8 @@ class ContractMapper(private val userMapper: UserMapper,
     fun toDto(contract: Contract, contractDataList: List<ContractData>): ContractResponseDto {
         return ContractResponseDto(
             id = contract.id!!,
-            template = templateMapper.toDto(contract.template),
-            attachment = contract.file?.let { attachmentMapper.toInfo(it) },
+            templateId = contract.template.id!!,
+//            attachment = contract.file?.let { attachmentMapper.toInfo(it) },
             operators = contract.operators.map { userMapper.toDto(it) },
             contractData = contractDataList.map {
                 ContractDataDto(

@@ -85,3 +85,11 @@ class ContractData(
     @Column(nullable = false) var value: String,
     @ManyToOne val contract: Contract,
 ) : BaseEntity()
+
+@Entity
+class Job(
+    @Column(nullable = false)val isDoc:Boolean,
+    @OneToOne val attachment: Attachment,
+    @ManyToMany val contracts: MutableList<Contract> = mutableListOf(),
+    @Enumerated(value = EnumType.STRING) val  status: JobStatus=JobStatus.PENDING
+): BaseEntity()

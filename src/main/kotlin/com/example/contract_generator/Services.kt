@@ -97,7 +97,7 @@ class ContractServiceImpl(
     override fun createContract(templateId: Long, list: List<ContractRequestDto>): List<ContractResponseDto> {
         val template: Template = templateRepository.findByIdAndDeletedFalse(templateId)
             ?: throw TemplateNotFoundException()
-        val currentUser = getCurrentUserId()?:throw UserNotFoundException()
+        val currentUser = getCurrentUserId()
 
         var responseDtos = mutableListOf<ContractResponseDto>()
         list.map { contractRequestDto ->
@@ -110,9 +110,10 @@ class ContractServiceImpl(
             }
             val contract = Contract(
                 template = template,
-            ).apply {
-                operators.add(currentUser)
-            }
+            )
+//            ).apply {
+//                operators.add(currentUser)
+//            }
             contractRepository.save(contract)
 
             val contractDataList = keys.map { key ->

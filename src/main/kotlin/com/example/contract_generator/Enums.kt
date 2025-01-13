@@ -2,7 +2,7 @@ package com.example.contract_generator
 
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 
-enum class ContractStatus {
+enum class JobStatus {
     STARTED, PENDING, COMPLETED
 }
 
