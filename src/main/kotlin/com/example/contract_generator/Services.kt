@@ -41,6 +41,7 @@ interface OrganizationService{
     fun create(request: CreateOrganizationRequest)
     fun update(request: UpdateOrganizationRequest, id: Long)
     fun existsByName(name: String)
+    fun getAll(directorId: Long): List<OrganizationDto>
 }
 
 interface KeyService {
@@ -83,7 +84,7 @@ interface ContractService{
 @Service
 class ContractServiceImpl(
     private val templateRepository: TemplateRepository,
-    private val attachmentRepository: AttachmentRepository,
+    private val attachmgit entRepository: AttachmentRepository,
     private val attachmentMapper: AttachmentMapper,
     private val contractRepository: ContractRepository,
     private val contractDataRepository: ContractDataRepository,
@@ -569,7 +570,7 @@ class UserServiceImpl(
 
     override fun existsUserData(passportId: String, phoneNumber: String) {
         if (userRepository.existsByPassportId(passportId))
-            throw UserAlreadyExistsException()
+            throw PassportIdAlreadyUsedException()
         if(userRepository.existsByPhoneNumber(phoneNumber))
             throw UserAlreadyExistsException()
     }
@@ -596,7 +597,8 @@ class UserServiceImpl(
 class OrganizationServiceImpl(
     private val organizationRepository: OrganizationRepository,
     private val userRepository: UserRepository,
-    private val usersOrganizationRepository: UsersOrganizationRepository
+    private val usersOrganizationRepository: UsersOrganizationRepository,
+    private val organizationMapper: OrganizationMapper
 ): OrganizationService {
 
     @Transactional
@@ -623,6 +625,15 @@ class OrganizationServiceImpl(
         name.let {
             if(organizationRepository.existsByName(name))
                 throw OrganizationAlreadyExistsException()
+        }
+    }
+
+    override fun getAll(directorId: Long): List<OrganizationDto> {
+        directorId.let {
+            userRepository.findByIdAndDeletedFalse(directorId)?: throw  UserNotFoundException()
+        }
+        return usersOrganizationRepository.findAllOrganizationByUserId(directorId).map {
+            organizationMapper.toDto(it)
         }
     }
 }

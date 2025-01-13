@@ -137,4 +137,10 @@ data class  GenerateContractRequest(
     val isDocsOrPdf: Boolean,
     val contractData: List<Long>
 )
+
+data class OrganizationDto(
+    val id: Long,
+    val name: String,
+    val address: String
+)
     

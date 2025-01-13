@@ -242,7 +242,11 @@ class OrganizationController(
     @PostMapping
     fun create(@RequestBody @Valid request: CreateOrganizationRequest) {
         organizationService.create(request)
-      
+    }
+
+    @GetMapping("/{director-id}")
+    fun getAll(@PathVariable("director-id") id: Long): List<OrganizationDto> {
+        return organizationService.getAll(id)
     }
 }
 

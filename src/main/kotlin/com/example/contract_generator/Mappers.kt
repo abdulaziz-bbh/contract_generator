@@ -9,6 +9,17 @@ import org.springframework.stereotype.Component
 import java.io.File
 
 @Component
+class OrganizationMapper{
+
+    fun toDto(organization: Organization): OrganizationDto {
+        return OrganizationDto(
+            id = organization.id!!,
+            name = organization.name,
+            address = organization.address,
+        )
+    }
+}
+@Component
 class KeyMapper {
 
     fun toDto(key: Key): KeyResponse {

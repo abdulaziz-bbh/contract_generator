@@ -120,6 +120,12 @@ interface OrganizationRepository : BaseRepository<Organization>{
 interface UsersOrganizationRepository : BaseRepository<UsersOrganization>{
 
     @Query("""
+        select o from Organization o join UsersOrganization uo on o.id = uo.organization.id
+        join users  u on uo.user.id = u.id where  uo.user.id = :userId order by o.createdAt desc 
+    """)
+    fun findAllOrganizationByUserId(userId: Long): List<Organization>
+
+    @Query("""
         select u from users u 
             join UsersOrganization uo on u.id = uo.user.id
             join Organization o on o.id = uo.organization.id
