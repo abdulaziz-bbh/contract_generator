@@ -59,9 +59,10 @@ interface TemplateService {
     fun getAll(page: Int, size: Int): Page<TemplateResponse>
     fun getAll(): List<TemplateResponse>
     fun getOne(id: Long): TemplateResponse
+    fun getTemplatesByOrganization(organizationId: Long): List<TemplateResponse>
     fun create( organizationId: Long, multipartFile: MultipartFile): TemplateDto
     fun delete(id: Long)
-    fun update(templateId: Long, multipartFile: MultipartFile)
+    fun update(templateId: Long, organizationId: Long, multipartFile: MultipartFile)
 }
 
 interface AttachmentService {
@@ -418,6 +419,10 @@ class TemplateServiceImpl(
         } ?: throw KeyNotFoundException()
     }
 
+    override fun getTemplatesByOrganization(organizationId: Long): List<TemplateResponse> {
+        val templates = templateRepository.findByOrganizationIdAndDeletedFalse(organizationId)
+        return templates.map { templateMapper.toDto(it) }
+    }
 
     override fun create(organizationId: Long, multipartFile: MultipartFile): TemplateDto {
         val organization = organizationRepository.findById(organizationId)
@@ -476,7 +481,7 @@ class TemplateServiceImpl(
         return keys
     }
 
-    override fun update(templateId: Long, multipartFile: MultipartFile) {
+    override fun update(templateId: Long, organizationId: Long, multipartFile: MultipartFile) {
         val existingTemplate = templateRepository.findByIdAndDeletedFalse(templateId)
             ?: throw TemplateNotFoundException()
 
@@ -486,6 +491,10 @@ class TemplateServiceImpl(
         val updatedTemplateName = multipartFile.originalFilename?.substringBeforeLast(".")
             ?: existingTemplate.templateName
 
+//        val existingTemplateWithName = templateRepository.findByTemplateNameWithOrganizationIdAndDeletedFalse(updatedTemplateName, organizationId)
+//        if (existingTemplateWithName != null && existingTemplateWithName.id != templateId) {
+//            updatedTemplateName = "${updatedTemplateName}_${System.currentTimeMillis()}"
+//        }
         val extractedKeys = extractKeysFromFile(updatedAttachmentInfo)
 
         val existingKeys = keyRepository.findAllByKeyInAndDeletedFalse(extractedKeys)
@@ -501,7 +510,7 @@ class TemplateServiceImpl(
 
         val oldFileName = existingTemplate.templateName
         val newFileName = multipartFile.originalFilename?.substringBeforeLast(".")
-        if (oldFileName != null && newFileName != null &&  oldFileName == newFileName) {
+        if (newFileName != null &&  oldFileName == newFileName) {
             attachmentService.delete(existingTemplate.file.id!!)
         }
 

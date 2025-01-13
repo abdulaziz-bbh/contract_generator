@@ -38,7 +38,8 @@ class KeyController(val service: KeyService) {
     @GetMapping("/page")
     fun getAll(
         @RequestParam(value = "page", defaultValue = "0") page: Int,
-        @RequestParam(value = "size", defaultValue = "10") size: Int) =
+        @RequestParam(value = "size", defaultValue = "10") size: Int
+    ) =
         service.getAll(page, size)
 
 
@@ -96,6 +97,7 @@ class ContractController(
         val response = contractService.getAll(isGenerated)
         return ResponseEntity.ok(response)
     }
+
     @GetMapping("/{contractId}")
     fun findContractById(
         @PathVariable contractId: Long
@@ -105,39 +107,48 @@ class ContractController(
     }
 
 }
-    @RestController
-    @RequestMapping("/api/v1/templates")
-    class TemplateController(val service: TemplateService) {
 
-        @GetMapping
-        fun getAll() = service.getAll()
+@RestController
+@RequestMapping("/api/v1/templates")
+class TemplateController(val service: TemplateService) {
 
-
-        @GetMapping("/page")
-        fun getAll(
-            @RequestParam(value = "page", defaultValue = "0") page: Int,
-            @RequestParam(value = "size", defaultValue = "10") size: Int
-        ) =
-            service.getAll(page, size)
+    @GetMapping
+    fun getAll() = service.getAll()
 
 
+    @GetMapping("/page")
+    fun getAll(
+        @RequestParam(value = "page", defaultValue = "0") page: Int,
+        @RequestParam(value = "size", defaultValue = "10") size: Int
+    ) =
+        service.getAll(page, size)
 
-    @PostMapping("/{organization-id}",consumes = ["multipart/form-data"])
-//    @RequestMapping("/create")
+    @GetMapping("{id}")
+    fun getOne(@PathVariable id: Long) = service.getOne(id)
+
+
+    @GetMapping("/orgs/{organizationId}")
+    fun getTemplatesByOrganizationId(@PathVariable organizationId: Long) =
+        service.getTemplatesByOrganization(organizationId)
+
+
+    @PostMapping("/{organization-id}", consumes = ["multipart/form-data"])
     fun create(
         @PathVariable("organization-id") organizationId: Long,
-        @RequestParam("file") multipartFile: MultipartFile) = service.create(organizationId,multipartFile)
+        @RequestParam("file") multipartFile: MultipartFile
+    ) = service.create(organizationId, multipartFile)
 
-        @PutMapping("{template-id}",consumes = ["multipart/form-data"])
-        fun update(
-            @PathVariable("template-id") templateId: Long,
-            @RequestParam("file") multipartFile: MultipartFile
-        ) = service.update(templateId, multipartFile)
+    @PutMapping("{template-id}", consumes = ["multipart/form-data"])
+    fun update(
+        @PathVariable("template-id") templateId: Long,
+        @RequestParam organizationId: Long,
+        @RequestParam("file") multipartFile: MultipartFile
+    ) = service.update(templateId,organizationId, multipartFile)
 
 
-        @DeleteMapping("{id}")
-        fun delete(@PathVariable id: Long) = service.delete(id)
-    }
+    @DeleteMapping("{id}")
+    fun delete(@PathVariable id: Long) = service.delete(id)
+}
 
 @RestController
 @RequestMapping("/api/v1/attachments")
@@ -169,50 +180,49 @@ class AttachmentController(private val service: AttachmentService) {
 }
 
 
+@RestController
+@RequestMapping("/api/v1/auth")
+class AuthController(
+    private val authService: AuthService,
+) {
 
-    @RestController
-    @RequestMapping("/api/v1/auth")
-    class AuthController(
-        private val authService: AuthService,
-    ) {
-
-        @PostMapping("/sign-up")
-        fun signup(@RequestBody @Valid request: CreateDirectorRequest) {
-            return authService.registration(request)
-        }
-
-        @PostMapping("/sign-in")
-        fun signIn(@RequestBody @Valid request: LoginRequest): AuthenticationDto {
-            return authService.login(request)
-        }
-
-        @PostMapping("/refresh-token")
-        fun refreshToken(request: HttpServletRequest, response: HttpServletResponse) {
-            return authService.refreshToken(request, response)
-        }
+    @PostMapping("/sign-up")
+    fun signup(@RequestBody @Valid request: CreateDirectorRequest) {
+        return authService.registration(request)
     }
 
-    @RestController
-    @RequestMapping("/api/v1/user")
-    class UserController(
-        private val userService: UserService
-    ) {
-
-        @PostMapping
-        fun create(@RequestBody @Valid request: CreateOperatorRequest) {
-            return userService.createOperator(request)
-        }
+    @PostMapping("/sign-in")
+    fun signIn(@RequestBody @Valid request: LoginRequest): AuthenticationDto {
+        return authService.login(request)
     }
 
-    @RestController
-    @RequestMapping("/api/v1/organizations")
-    class OrganizationController(
-        private val organizationService: OrganizationService,
-    ) {
-
-        @PostMapping
-        fun create(@RequestBody @Valid request: CreateOrganizationRequest) {
-            organizationService.create(request)
-        }
+    @PostMapping("/refresh-token")
+    fun refreshToken(request: HttpServletRequest, response: HttpServletResponse) {
+        return authService.refreshToken(request, response)
     }
+}
+
+@RestController
+@RequestMapping("/api/v1/user")
+class UserController(
+    private val userService: UserService
+) {
+
+    @PostMapping
+    fun create(@RequestBody @Valid request: CreateOperatorRequest) {
+        return userService.createOperator(request)
+    }
+}
+
+@RestController
+@RequestMapping("/api/v1/organizations")
+class OrganizationController(
+    private val organizationService: OrganizationService,
+) {
+
+    @PostMapping
+    fun create(@RequestBody @Valid request: CreateOrganizationRequest) {
+        organizationService.create(request)
+    }
+}
 
