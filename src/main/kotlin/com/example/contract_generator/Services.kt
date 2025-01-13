@@ -38,7 +38,7 @@ interface UserService{
 interface AuthService{
     fun registration(request: CreateDirectorRequest)
     fun login(request: LoginRequest) : AuthenticationDto
-    fun refreshToken(request: HttpServletRequest, response: HttpServletResponse)
+//    fun refreshToken(request: HttpServletRequest, response: HttpServletResponse)
 }
 interface OrganizationService{
     fun create(request: CreateOrganizationRequest)
@@ -569,7 +569,6 @@ class CustomUserDetailsService(private val userRepository: UserRepository) : Use
 class AuthServiceImpl(
     private val authenticationManager: AuthenticationManager,
     private val userRepository: UserRepository,
-    private val tokenRepository: TokenRepository,
     private val jwtProvider: JwtProvider,
     private val userMapper: UserMapper,
     private val userDetailsService: CustomUserDetailsService
@@ -588,54 +587,12 @@ class AuthServiceImpl(
         val user = userDetailsService.loadUserByUsername(request.username)
         val accessToken = jwtProvider.generateAccessToken(user)
         val refreshToken = jwtProvider.generateRefreshToken(user)
-        saveToken(user, accessToken)
         return AuthenticationDto(
             accessToken = accessToken,
             refreshToken = refreshToken
         )
     }
 
-    override fun refreshToken(request: HttpServletRequest, response: HttpServletResponse) {
-        val authHeader = request.getHeader(HttpHeaders.AUTHORIZATION)
-        if (authHeader == null || authHeader.startsWith("Bearer ")) return
-        val refreshToken  = authHeader.substring(7)
-        val username = jwtProvider.extractUsername(refreshToken)
-        username.let {
-            val user = userRepository.findByPhoneNumber(username) ?: throw UserNotFoundException()
-            if (jwtProvider.isTokenValid(refreshToken, user)){
-                val accessToken = jwtProvider.generateAccessToken(user)
-                revokeUserAllTokens(user)
-                saveToken(user, accessToken)
-                val dto = AuthenticationDto(
-                    accessToken = accessToken,
-                    refreshToken = refreshToken
-                )
-                ObjectMapper().writeValue(response.outputStream, dto)
-            }
-        }
-    }
-
-    private fun revokeUserAllTokens(user: User) {
-        val tokens = user.id?.let { tokenRepository.findAllValidTokenByUser(it) }
-        if (tokens.isNullOrEmpty()) return
-
-        tokens.forEach { token -> run {
-                token.revoked = true
-                token.expired = true
-            }
-        }
-        tokenRepository.saveAll(tokens)
-    }
-    private fun saveToken(user: User, jwt: String) {
-        val token = Token(
-            token = jwt,
-            user = user,
-            expired = false,
-            revoked = false,
-            tokenType = "Bearer"
-        )
-        tokenRepository.save(token)
-    }
     private fun existsUserData(passportId: String, phoneNumber: String) {
         if (userRepository.existsByPassportId(passportId))
             throw UserAlreadyExistsException()

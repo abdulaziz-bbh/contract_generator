@@ -9,6 +9,7 @@ import jakarta.servlet.ServletException
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.http.HttpHeaders
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.core.userdetails.UserDetails
@@ -87,7 +88,6 @@ class JwtProvider(
 class JwtFilter(
     private val jwtProvider: JwtProvider,
     private val userDetailsService: UserDetailsService,
-    private val tokenRepository: TokenRepository
 ) : OncePerRequestFilter() {
 
     override fun doFilterInternal(
@@ -100,7 +100,7 @@ class JwtFilter(
             return
         }
 
-        val authHeader = request.getHeader("Authorization")
+        val authHeader = request.getHeader(HttpHeaders.AUTHORIZATION)
         if (authHeader.isNullOrEmpty() || !authHeader.startsWith("Bearer ")) {
             filterChain.doFilter(request, response)
             return
@@ -111,8 +111,7 @@ class JwtFilter(
 
         if (SecurityContextHolder.getContext().authentication == null) {
             val userDetails = userDetailsService.loadUserByUsername(username)
-            val token = tokenRepository.findByToken(jwt) ?: throw TokenNotFoundException()
-            val isTokenValid = !token.expired && !token.revoked
+            val isTokenValid = jwtProvider.isTokenValid(jwt, userDetails)
 
             try {
                 if (jwtProvider.isTokenValid(jwt, userDetails) && isTokenValid) {
