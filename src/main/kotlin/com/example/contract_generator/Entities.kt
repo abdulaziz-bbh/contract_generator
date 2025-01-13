@@ -32,7 +32,7 @@ class User(
     @Enumerated(EnumType.STRING) @Column(nullable = false) val role: Role
 ) : BaseEntity(), UserDetails {
 
-    override fun getAuthorities(): List<SimpleGrantedAuthority> = role.getAuthority()
+    override fun getAuthorities(): List<SimpleGrantedAuthority> = mutableListOf(SimpleGrantedAuthority("ROLE_${role.name}"))
     override fun getPassword(): String = passWord
     override fun getUsername(): String = phoneNumber
     override fun isAccountNonExpired(): Boolean = true
@@ -41,14 +41,6 @@ class User(
     override fun isEnabled(): Boolean = true
 
 }
-@Entity
-class Token(
-    @Column(nullable = false) var token: String,
-    @Column(nullable = false) var tokenType: String,
-    @Column(nullable = false) var revoked: Boolean,
-    @Column(nullable = false) var expired: Boolean,
-    @ManyToOne(fetch = FetchType.LAZY) var user: User
-): BaseEntity()
 
 @Entity
 class Organization(

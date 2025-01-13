@@ -97,14 +97,6 @@ interface UserRepository : BaseRepository<User>{
     fun findByOrganizationId(orgId: Long): List<User>?
 
 }
-interface TokenRepository : BaseRepository<Token>{
-
-    @Query("select t from Token t inner join users u " +
-            "on t.user.id = u.id where u.id = :id and (t.expired = false or t.revoked = false )")
-    fun findAllValidTokenByUser(@Param("id") id: Long): List<Token>
-
-    fun findByToken(token: String): Token?
-}
 
 interface OrganizationRepository : BaseRepository<Organization>{
     fun existsByName(name: String): Boolean
