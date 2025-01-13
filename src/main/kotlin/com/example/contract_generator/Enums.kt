@@ -2,8 +2,8 @@ package com.example.contract_generator
 
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 
-enum class ContractStatus {
-    STARTED, PENDING, COMPLETED
+enum class JobStatus {
+    PENDING, COMPLETED,FAILED
 }
 
 enum class ErrorCode(val code: Int) {
@@ -18,11 +18,15 @@ enum class ErrorCode(val code: Int) {
     ATTACHMENT_ALREADY_EXISTS(41),
     KEY_NOT_FOUND(50),
     KEY_ALREADY_EXISTS(51),
+    DUPLICATE_KEY(53),
     TEMPLATE_NOT_FOUND(60),
     TEMPLATE_ALREADY_EXISTS(61),
+    MISSING_TEMPLATE_KEY(62),
     INVALID_TEMPLATE_NAME(77),
     CONTRACT_NOT_FOUND(80),
+    DUPLICATE_CONTRACT(82),
     BAD_REQUEST(81),
+    CONTRACT_DATA_NOT_FOUND(90),
     CONTRACT_DATA_NOT_FOUND(90),
     INVALID_FILE_FORMAT(91)
     }

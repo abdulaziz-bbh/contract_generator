@@ -111,13 +111,16 @@ data class AttachmentInfo(
 )
 
 data class ContractRequestDto(
-    val contractData: Map<Long,String>
+    val contractData: List<CreateContractDataDto>
+)
+data class CreateContractDataDto(
+    @field:NotNull val keyId: Long,
+    @field:NotNull val value: String
 )
 
 data class ContractResponseDto(
     val id: Long,
-    val template: TemplateResponse,
-    val attachment: AttachmentInfo?,
+    val templateName: String,
     val operators: List<UserDto>,
     val contractData: List<ContractDataDto>,
     val isGenerated: Boolean
@@ -137,10 +140,14 @@ data class  GenerateContractRequest(
     val isDocsOrPdf: Boolean,
     val contractData: List<Long>
 )
+data class JobDto(
+    val id: Long,
+    val isDoc: Boolean,
+    val status: JobStatus,
+)
 
 data class OrganizationDto(
     val id: Long,
     val name: String,
     val address: String
 )
-    

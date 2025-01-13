@@ -1,9 +1,9 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/contract_generator
+    url: jdbc:postgresql://localhost:5432/democloud
     driver-class-name: org.postgresql.Driver
     username: postgres
-    password: postgres
+    password: 1234
 
   jpa:
     hibernate:

@@ -213,23 +213,30 @@ class UserMapper(
 
 @Component
 class ContractMapper(private val userMapper: UserMapper,
-    private val attachmentMapper: AttachmentMapper,
-    private val templateMapper: TemplateMapper,
     private val keyMapper: KeyMapper) {
     fun toDto(contract: Contract, contractDataList: List<ContractData>): ContractResponseDto {
         return ContractResponseDto(
             id = contract.id!!,
-            template = templateMapper.toDto(contract.template),
-            attachment = contract.file?.let { attachmentMapper.toInfo(it) },
+            templateName = contract.template.templateName,
             operators = contract.operators.map { userMapper.toDto(it) },
             contractData = contractDataList.map {
                 ContractDataDto(
-                    id = it.id ?: throw IllegalStateException("ContractData ID cannot be null."),
+                    id = it.id !!,
                     key = keyMapper.toDto(it.key),
                     value = it.value
                 )
             },
             isGenerated = contract.isGenerated
+        )
+    }
+}
+@Component
+class JobMapper {
+    fun toDto(job: Job): JobDto {
+        return JobDto(
+            id = job.id!!,
+            isDoc = job.isDoc,
+            status = job.status,
         )
     }
 }

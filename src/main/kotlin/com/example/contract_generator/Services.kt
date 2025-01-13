@@ -3,24 +3,25 @@ package com.example.contract_generator
 import jakarta.persistence.EntityManager
 import jakarta.transaction.Transactional
 import org.apache.poi.xwpf.usermodel.XWPFDocument
+import org.apache.poi.xwpf.usermodel.XWPFRun
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.core.io.InputStreamResource
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable
+import org.springframework.data.domain.Sort
+import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
-import org.springframework.stereotype.Service
-import org.apache.poi.xwpf.usermodel.XWPFRun
-import org.springframework.http.HttpHeaders
 import org.springframework.security.authentication.AuthenticationManager
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.userdetails.UserDetailsService
-import org.springframework.beans.factory.annotation.Value
-import org.springframework.data.domain.Sort
+import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
 import java.io.*
 import java.nio.file.Files
-import java.time.LocalDate
+import java.nio.file.Paths
+import java.nio.file.StandardCopyOption
 import java.util.*
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -66,7 +67,7 @@ interface TemplateService {
 
 interface AttachmentService {
     fun upload(multipartFile: MultipartFile , subFolder : String? = null): AttachmentInfo
-    fun download(id: Long): ResponseEntity<*>
+    fun download(hashId: String): ResponseEntity<*>
     fun preview(id: Long): ResponseEntity<*>
     fun findById(id: Long): Attachment
     fun delete(id: Long)
@@ -74,19 +75,221 @@ interface AttachmentService {
 
 interface ContractService{
     fun createContract(templateId: Long, list: List<ContractRequestDto>): List<ContractResponseDto>
-    fun updateContract(list: List<ContractRequestDto>)
-    fun getZip(list: List<String>): ResponseEntity<*>
-    fun getPdfsZip(date: LocalDate):ResponseEntity<*>
+    fun updateContract(list: List<CreateContractDataDto>)
     fun delete(contractIds: List<Long>)
     fun getAll(isGenerated:Boolean?): List<ContractResponseDto>
     fun findById(contractId: Long):ContractResponseDto
+}
+interface JobService{
+    fun generateContract(contractIds: List<Long>,isDoc: Boolean): JobDto
+    fun getStatus(jobIds: List<Long>): Map<JobDto,String>
+    fun generateZip(job: Job)
+}
+@Service
+class JobServiceImpl(private val jobRepository: JobRepository,
+    private val contractRepository: ContractRepository,
+    private val jobMapper: JobMapper,
+    private val contractDataRepository: ContractDataRepository,
+    private val attachmentRepository: AttachmentRepository,
+    private val attachmentMapper: AttachmentMapper
+    ): JobService{
+    @Transactional
+    override fun generateContract(contractIds: List<Long>, isDoc: Boolean): JobDto {
+        val contracts = contractRepository.findAllByIdInAndDeletedFalse(contractIds)
+        if (contracts.size != contractIds.size) {
+            throw ContractNotFound()
+        }
+
+        val job = Job(isDoc = isDoc)
+        job.contracts.addAll(contracts)
+        return jobMapper.toDto(jobRepository.save(job))
+    }
+
+    override fun getStatus(jobIds: List<Long>): Map<JobDto, String> {
+        val jobs = jobRepository.findAllById(jobIds)
+        if (jobs.size != jobIds.size) {
+
+        }
+        return jobs.associate { job ->
+            val jobDto = jobMapper.toDto(job)
+            val attachmentName = if (job.status == JobStatus.COMPLETED) {
+                job.attachment?.hashId?: "No Attachment"
+            } else {
+                ""
+            }
+            jobDto to attachmentName
+        }
+    }
+    override fun generateZip(job: Job) {
+        val files: MutableList<File> = mutableListOf()
+        try {
+            job.contracts.forEach { contract ->
+                val contractFile = if (contract.isGenerated) {
+                    contract.file?.let { File(it.path) }
+                        ?: throw AttachmentNotFound()
+                } else {
+                    val template = contract.template
+
+                    val (_, uuid, path) = attachmentMapper.createDirectoryPath(subFolder = "contract")
+                    val tempFile = File("$path/$uuid.docx")
+                    tempFile.createNewFile()
+
+                    Files.copy(Paths.get(template.file.path), tempFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                    val keys = contractDataRepository.findAllByContract(contract)
+                        .associate { it.key.key to it.value }
+                    val replacedFile = replaceKeysWithStyles(tempFile, keys)
+
+                    val newAttachment = Attachment(
+                        name = replacedFile.name,
+                        contentType = "application/docx",
+                        size = replacedFile.length(),
+                        extension = "docx",
+                        path = replacedFile.absolutePath
+                    )
+                    attachmentRepository.save(newAttachment)
+
+                    contract.file = newAttachment
+                    contract.isGenerated = true
+                    contractRepository.save(contract)
+                    replacedFile
+                }
+                files.add(contractFile)
+            }
+            var zipFile:File? = null
+            if (!job.isDoc){
+                val outputPdfPath = File("file/pdf")
+                if (!outputPdfPath.exists()) {
+                    outputPdfPath.mkdirs()
+                }
+                val pdfFiles = files.map {
+                    file -> convertDocxToPdf(file, outputPdfPath.absolutePath)
+                    File("${outputPdfPath.absolutePath}/${file.nameWithoutExtension}.pdf")
+                }
+                zipFile = createZipFile(pdfFiles)
+            }else {
+                zipFile = createZipFile(files)
+            }
+            val zipAttachment = Attachment(
+                name = zipFile.name,
+                contentType = "application/zip",
+                size = zipFile.length(),
+                extension = "zip",
+                path = zipFile.absolutePath
+            )
+            attachmentRepository.save(zipAttachment)
+
+            job.attachment = zipAttachment
+            job.status = JobStatus.COMPLETED
+            jobRepository.save(job)
+        } catch (e: Exception) {
+            job.status = JobStatus.FAILED
+            jobRepository.save(job)
+            throw e
+        }
+    }
+
+    private fun replaceKeysWithStyles(docxFile: File, keys: Map<String, String>): File {
+        val wordDoc = XWPFDocument(Files.newInputStream(docxFile.toPath()))
+
+        wordDoc.paragraphs.forEach { paragraph ->
+            replaceTextInRuns(paragraph.runs, keys)
+        }
+
+        wordDoc.tables.forEach { table ->
+            table.rows.forEach { row ->
+                row.tableCells.forEach { cell ->
+                    cell.paragraphs.forEach { paragraph ->
+                        replaceTextInRuns(paragraph.runs, keys)
+                    }
+                }
+            }
+        }
+
+        val replacedFile = File(docxFile.parentFile, "contract_${docxFile.name}")
+        Files.newOutputStream(replacedFile.toPath()).use { wordDoc.write(it) }
+        docxFile.delete()
+        return replacedFile
+    }
+
+    fun convertDocxToPdf(file: File,outputFileDir: String) {
+        val inputFile: String =file.absolutePath
+        val processBuilder = ProcessBuilder(
+            "libreoffice",
+            "--headless",
+            "--convert-to", "pdf",
+            "--outdir", outputFileDir,
+            inputFile
+        )
+
+        try {
+            val process =processBuilder.start()
+            process.waitFor()
+        } catch (e: IOException) {
+            e.printStackTrace()
+        } catch (e: InterruptedException) {
+            e.printStackTrace()
+        }
+    }
+
+    fun createZipFile(files: List<File>): File {
+        val zipFilePath =  "${attachmentMapper.filePath}/zip/${UUID.randomUUID()}.zip"
+
+        val parentDir = File(zipFilePath).parentFile
+        if (!parentDir.exists()) {
+            parentDir.mkdirs()
+        }
+        val zipFile = File(zipFilePath)
+
+        try {
+            ZipOutputStream(BufferedOutputStream(FileOutputStream(zipFile))).use { zipOut ->
+                for (file in files) {
+                    if (file.exists()) {
+                        FileInputStream(file).use { input ->
+                            val entry = ZipEntry(file.name)
+                            zipOut.putNextEntry(entry)
+                            input.copyTo(zipOut)
+                        }
+                    }
+                }
+            }
+        } catch (e: IOException) {
+            e.printStackTrace()
+        }
+
+        return zipFile
+    }
+
+
+    private fun replaceTextInRuns(runs: List<XWPFRun>, keys: Map<String, String>) {
+        runs.forEach { run ->
+            keys.forEach { (key, value) ->
+                if (run.text().contains(key)) {
+                    val fontFamily = run.fontFamily
+                    val fontSize = run.fontSize
+                    val bold = run.isBold
+                    val italic = run.isItalic
+                    val color = run.color
+                    val underline = run.underline
+
+                    val newText = run.text().replace(key, value)
+                    run.setText(newText, 0)
+
+                    run.fontFamily = fontFamily
+                    run.fontSize = fontSize
+                    run.isBold = bold
+                    run.isItalic = italic
+                    run.color = color
+                    run.underline = underline
+                }
+            }
+        }
+    }
+
 }
 
 @Service
 class ContractServiceImpl(
     private val templateRepository: TemplateRepository,
-    private val attachmentRepository: AttachmentRepository,
-    private val attachmentMapper: AttachmentMapper,
     private val contractRepository: ContractRepository,
     private val contractDataRepository: ContractDataRepository,
     private val keyRepository: KeyRepository,
@@ -99,111 +302,75 @@ class ContractServiceImpl(
             ?: throw TemplateNotFoundException()
         val currentUser = getCurrentUserId()?:throw UserNotFoundException()
 
-        var responseDtos = mutableListOf<ContractResponseDto>()
-        list.map { contractRequestDto ->
-            val keyIds = contractRequestDto.contractData.keys
-            val keys = keyRepository.findAllByIdInAndDeletedFalse(keyIds.toList())
+        if (list.size != list.distinctBy { it.contractData }.size) {
+            throw DuplicateContract()
+        }
+        val requiredKeyIds = template.keys.map { it.id }.toSet()
+
+        val responseDtos = mutableListOf<ContractResponseDto>()
+
+        list.forEach { contractRequestDto ->
+            val keyIds = contractRequestDto.contractData.map { it.keyId }
+
+            if (keyIds.size != keyIds.distinct().size) {
+                throw DuplicateKey()
+            }
+
+            if (!requiredKeyIds.all { it in keyIds }) {
+                throw MissingTemplateKeys()
+            }
+            val keys = keyRepository.findAllByIdInAndDeletedFalse(keyIds)
 
             val unresolvedKeyIds = keyIds - keys.map { it.id }
             if (unresolvedKeyIds.isNotEmpty()) {
                 throw KeyNotFoundException()
             }
-            val contract = Contract(
-                template = template,
-            ).apply {
+
+            val contract = Contract(template = template).apply {
                 operators.add(currentUser)
             }
             contractRepository.save(contract)
 
-            val contractDataList = keys.map { key ->
+            val contractDataList = contractRequestDto.contractData.map { contractData ->
+                val key = keys.find { it.id == contractData.keyId }
+                    ?: throw KeyNotFoundException()
                 ContractData(
                     key = key,
-                    value = contractRequestDto.contractData[key.id]?:throw KeyNotFoundException(),
+                    value = contractData.value,
                     contract = contract
                 )
             }
             contractDataRepository.saveAll(contractDataList)
             responseDtos.add(contractMapper.toDto(contract, contractDataList))
         }
+
         return responseDtos
     }
 
 
 
+
     @Transactional
-    override fun updateContract(list: List<ContractRequestDto>){
-        list.forEach { contractRequestDto ->
-            val contractDataIds = contractRequestDto.contractData.keys
-            val contractDataList = contractDataRepository.findAllByIdInAndDeletedFalse(contractDataIds.toList())
-
-            val unresolvedDataIds = contractDataIds - contractDataList.mapNotNull { it.id }
-            if (unresolvedDataIds.isNotEmpty()) {
-                throw ContractDataNotFound()
-            }
-            contractDataList.forEach { contractData ->
-                val newValue = contractRequestDto.contractData[contractData.id]
-                if (newValue != null) {
-                    contractData.value = newValue
-                }
-            }
-            contractDataRepository.saveAll(contractDataList)
+    override fun updateContract(list: List<CreateContractDataDto>) {
+        val keyIds = list.map { it.keyId }
+        if (keyIds.size != keyIds.distinct().size) {
+            throw DuplicateKey()
         }
+        val existingContractData = contractDataRepository.findAllByIdInAndDeletedFalse(keyIds)
+        val unresolvedKeyIds = keyIds - existingContractData.mapNotNull { it.key.id }
+        if (unresolvedKeyIds.isNotEmpty()) {
+            throw ContractDataNotFound()
+        }
+
+        existingContractData.forEach { contractData ->
+            val newValue = list.find { it.keyId == contractData.key.id }?.value
+            if (newValue != null) {
+                contractData.value = newValue
+            }
+        }
+        contractDataRepository.saveAll(existingContractData)
     }
 
-
-    override fun getZip(list: List<String>): ResponseEntity<*> {
-        var files :MutableList<File> = mutableListOf()
-        for (s in list) {
-            files.add(contractRepository.findByFile_Name(s)?.let {
-                File(it.file?.path)
-            }
-                ?: throw ContractNotFound())
-        }
-        val pdfPath = "${attachmentMapper.filePath}/pdf"
-        val file = File(pdfPath)
-        if (!file.exists()) {
-            file.mkdirs()
-        }
-        val pdfFiles = mutableListOf<File>()
-        for (f in files) {
-            convertDocxToPdf(f.absolutePath, pdfPath)
-            pdfFiles.add(File("${pdfPath}/${f.nameWithoutExtension}.pdf"))
-        }
-        return createZipFile(pdfFiles)
-    }
-
-    override fun getPdfsZip(date: LocalDate): ResponseEntity<*> {
-
-        val year = date.year
-        val month = date.monthValue
-        val day = date.dayOfMonth
-
-        val contractFolderPath = "file/$year/$month/$day/contract"
-        val contractFolder = File(contractFolderPath)
-
-        if (!contractFolder.exists() || !contractFolder.isDirectory) {
-            throw ContractNotFound()
-        }
-
-        val docxFiles = contractFolder.listFiles { file -> file.extension == "docx" } ?: emptyArray()
-
-        if (docxFiles.isEmpty()) {
-            return ResponseEntity.accepted().body<Any>(null)
-        }
-        val pdfPath = "${attachmentMapper.filePath}/pdf"
-        val file = File(pdfPath)
-        if (!file.exists()) {
-            file.mkdirs()
-        }
-
-        val pdfFiles = mutableListOf<File>()
-        for (docxFile in docxFiles) {
-            convertDocxToPdf(docxFile.absolutePath, pdfPath)
-            pdfFiles.add(File("${pdfPath}/${docxFile.nameWithoutExtension}.pdf"))
-        }
-
-        return createZipFile(pdfFiles)
-    }
 
     @Transactional
     override fun delete(contractIds: List<Long>) {
@@ -239,105 +406,7 @@ class ContractServiceImpl(
     }
 
 
-    private fun replaceKeysWithStyles(docxFile: File, keys: Map<String, String>): File {
-        val wordDoc = XWPFDocument(Files.newInputStream(docxFile.toPath()))
 
-        wordDoc.paragraphs.forEach { paragraph ->
-            replaceTextInRuns(paragraph.runs, keys)
-        }
-
-        wordDoc.tables.forEach { table ->
-            table.rows.forEach { row ->
-                row.tableCells.forEach { cell ->
-                    cell.paragraphs.forEach { paragraph ->
-                        replaceTextInRuns(paragraph.runs, keys)
-                    }
-                }
-            }
-        }
-
-        val replacedFile = File(docxFile.parentFile, "contract_${docxFile.name}")
-        Files.newOutputStream(replacedFile.toPath()).use { wordDoc.write(it) }
-        docxFile.delete()
-        return replacedFile
-    }
-
-    fun convertDocxToPdf(inputFile: String, outputFileDir: String) {
-        val processBuilder = ProcessBuilder(
-            "libreoffice",
-            "--headless",
-            "--convert-to", "pdf",
-            "--outdir", outputFileDir,
-            inputFile
-        )
-
-        try {
-            val process =processBuilder.start()
-            process.waitFor()
-        } catch (e: IOException) {
-            e.printStackTrace()
-        } catch (e: InterruptedException) {
-            e.printStackTrace()
-        }
-    }
-
-    fun createZipFile(files: List<File>): ResponseEntity<*> {
-        val zipFilePath =  "${attachmentMapper.filePath}/zip/${UUID.randomUUID()}.zip"
-
-        val parentDir = File(zipFilePath).parentFile
-        if (!parentDir.exists()) {
-            parentDir.mkdirs()
-        }
-        val zipFile = File(zipFilePath)
-
-        try {
-            ZipOutputStream(BufferedOutputStream(FileOutputStream(zipFile))).use { zipOut ->
-                for (file in files) {
-                    if (file.exists()) {
-                        FileInputStream(file).use { input ->
-                            val entry = ZipEntry(file.name)
-                            zipOut.putNextEntry(entry)
-                            input.copyTo(zipOut)
-                        }
-                    }
-                }
-            }
-        } catch (e: IOException) {
-            e.printStackTrace()
-        }
-
-        val resource = InputStreamResource(FileInputStream(zipFile))
-        return ResponseEntity.ok()
-            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"${zipFile.name}\"")
-            .contentType(MediaType.APPLICATION_OCTET_STREAM)
-            .body(resource)
-    }
-
-
-    private fun replaceTextInRuns(runs: List<XWPFRun>, keys: Map<String, String>) {
-        runs.forEach { run ->
-            keys.forEach { (key, value) ->
-                if (run.text().contains(key)) {
-                    val fontFamily = run.fontFamily
-                    val fontSize = run.fontSize
-                    val bold = run.isBold
-                    val italic = run.isItalic
-                    val color = run.color
-                    val underline = run.underline
-
-                    val newText = run.text().replace(key, value)
-                    run.setText(newText, 0)
-
-                    run.fontFamily = fontFamily
-                    run.fontSize = fontSize
-                    run.isBold = bold
-                    run.isItalic = italic
-                    run.color = color
-                    run.underline = underline
-                }
-            }
-        }
-    }
 }
 
 @Service
@@ -710,19 +779,16 @@ class AttachmentServiceImpl(
 
 
     @Throws(IOException::class)
-    override fun download(id: Long): ResponseEntity<*> {
-        val fileEntity = repository.findByIdAndDeletedFalse(id)?:throw AttachmentNotFound()
+    override fun download(hashId: String): ResponseEntity<*> {
+        val fileEntity = repository.findByHashIdAndDeletedFalse(hashId)?:throw AttachmentNotFound()
 
-        return fileEntity.run{
-            val inputStream = FileInputStream(path)
-            val resource = InputStreamResource(inputStream)
-
-            ResponseEntity.ok()
-                .header("Content-Disposition", "attachment; filename=\"${name}\"")
-                .contentType(MediaType.parseMediaType(contentType))
-                .body(resource)
-        }
+        val resource = InputStreamResource(FileInputStream(fileEntity.path))
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"${fileEntity.name}\"")
+            .contentType(MediaType.APPLICATION_OCTET_STREAM)
+            .body(resource)
     }
+
     @Throws(IOException::class)
     override fun preview(id: Long): ResponseEntity<*> {
         val fileEntity = repository.findByIdAndDeletedFalse(id)?:throw AttachmentNotFound()
