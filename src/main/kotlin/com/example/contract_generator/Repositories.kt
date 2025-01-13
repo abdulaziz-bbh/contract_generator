@@ -79,6 +79,7 @@ interface KeyRepository : BaseRepository<Key> {
 interface ContractRepository : BaseRepository<Contract> {
     fun findByFile_Name(fileName: String): Contract?
     fun findByIsGeneratedAndDeletedFalse(isGenerated: Boolean): List<Contract>
+    fun findAllByIdInAndDeletedFalse(ids: Collection<Long>): List<Contract>
 }
 
 @Repository
@@ -106,11 +107,17 @@ interface OrganizationRepository : BaseRepository<Organization>{
 }
 
 interface AttachmentRepository : BaseRepository<Attachment> {
-
+    fun findByHashIdAndDeletedFalse(hashId: String): Attachment?
     fun findByName(name: String): Attachment?
 }
 
 interface ContractDataRepository : BaseRepository<ContractData>{
     fun findAllByContract(contract: Contract): List<ContractData>
     fun findAllByIdInAndDeletedFalse(ids: Collection<Long>): List<ContractData>
+}
+@Repository
+interface JobRepository : BaseRepository<Job>{
+    fun findAllByIdInAndDeletedFalse(ids: Collection<Long>): List<Job>
+    @Query("SELECT j FROM Job j LEFT JOIN FETCH j.contracts WHERE j.status = :status")
+    fun findAllByStatus(@Param("status") status: JobStatus): List<Job>
 }

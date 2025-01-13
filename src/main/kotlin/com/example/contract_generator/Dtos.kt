@@ -115,8 +115,7 @@ data class CreateContractDataDto(
 
 data class ContractResponseDto(
     val id: Long,
-    val templateId: Long,
-//    val attachment: AttachmentInfo?,
+    val templateName: String,
     val operators: List<UserDto>,
     val contractData: List<ContractDataDto>,
     val isGenerated: Boolean
@@ -135,5 +134,10 @@ data class ContractUpdateDto(
 data class  GenerateContractRequest(
     val isDocsOrPdf: Boolean,
     val contractData: List<Long>
+)
+data class JobDto(
+    val id: Long,
+    val isDoc: Boolean,
+    val status: JobStatus,
 )
     

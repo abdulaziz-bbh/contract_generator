@@ -1,6 +1,7 @@
 package com.example.contract_generator
 
 import jakarta.persistence.*
+import org.hashids.Hashids
 import org.hibernate.annotations.ColumnDefault
 import org.springframework.data.annotation.CreatedBy
 import org.springframework.data.annotation.CreatedDate
@@ -54,8 +55,15 @@ class Attachment(
     @Column(nullable = false) val contentType: String,
     @Column(nullable = false) var size: Long,
     @Column(nullable = false) val extension: String,
-    @Column(nullable = false) val path: String
-) : BaseEntity()
+    @Column(nullable = false) val path: String,
+    @Column(nullable = true) var hashId: String?=null,
+) : BaseEntity(){
+    @PostPersist
+    fun generateHashids() {
+            val hashids = Hashids(this.javaClass.name,10)
+            this.hashId = hashids.encode(this.id!!)
+    }
+}
 
 @Entity
 class Key(
@@ -73,9 +81,9 @@ class Template(
 @Entity
 class Contract(
     @ManyToOne val template: Template,
-    @OneToOne val file: Attachment? = null,
+    @OneToOne var file: Attachment? = null,
     @ManyToMany val operators : MutableList<User> = mutableListOf(),
-    val isGenerated: Boolean = false
+    var isGenerated: Boolean = false
 
 ) : BaseEntity()
 
@@ -89,7 +97,7 @@ class ContractData(
 @Entity
 class Job(
     @Column(nullable = false)val isDoc:Boolean,
-    @OneToOne val attachment: Attachment,
+    @OneToOne var attachment: Attachment? = null,
     @ManyToMany val contracts: MutableList<Contract> = mutableListOf(),
-    @Enumerated(value = EnumType.STRING) val  status: JobStatus=JobStatus.PENDING
+    @Enumerated(value = EnumType.STRING) var status: JobStatus=JobStatus.PENDING
 ): BaseEntity()
