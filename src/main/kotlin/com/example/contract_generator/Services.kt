@@ -59,7 +59,7 @@ interface TemplateService {
     fun getAll(page: Int, size: Int): Page<TemplateResponse>
     fun getAll(): List<TemplateResponse>
     fun getOne(id: Long): TemplateResponse
-    fun create( organizationId: Long, multipartFile: MultipartFile)
+    fun create( organizationId: Long, multipartFile: MultipartFile): TemplateDto
     fun delete(id: Long)
     fun update(templateId: Long, multipartFile: MultipartFile)
 }
@@ -372,6 +372,9 @@ class KeyServiceImpl(
     }
 
     override fun update(id: Long, request: KeyUpdateRequest) {
+        if (request.key.isBlank()) {
+            throw BadRequestException()
+        }
         val key = keyRepository.findByIdAndDeletedFalse(id) ?: throw KeyNotFoundException()
         keyRepository.findByName(id, request.key)?.let { throw KeyAlreadyExistsException() }
 
@@ -416,7 +419,7 @@ class TemplateServiceImpl(
     }
 
 
-    override fun create(organizationId: Long, multipartFile: MultipartFile) {
+    override fun create(organizationId: Long, multipartFile: MultipartFile): TemplateDto {
         val organization = organizationRepository.findById(organizationId)
             .orElseThrow { OrganizationNotFoundException() }
 
@@ -438,12 +441,14 @@ class TemplateServiceImpl(
             } else {
                 val keyCreateRequest = KeyCreateRequest(key = keyString)
                 keyService.create(keyCreateRequest)
-                keyRepository.findByKeyAndDeletedFalse(keyString) ?: throw KeyAlreadyExistsException()
+                keyRepository.findByKeyAndDeletedFalse(keyString)
+                    ?: throw KeyAlreadyExistsException()
             }
-        }
+        }.toSet()
 
-        val template = templateMapper.toEntity(templateName, attachment, keyEntities, organization)
-        templateRepository.save(template)
+        val template = templateMapper.toEntity(templateName, attachment, keyEntities.toMutableList(), organization)
+        val savedTemplate = templateRepository.save(template)
+        return templateMapper.toTDto(savedTemplate)
     }
 
     private fun extractKeysFromFile(attachmentInfo: AttachmentInfo): List<String> {

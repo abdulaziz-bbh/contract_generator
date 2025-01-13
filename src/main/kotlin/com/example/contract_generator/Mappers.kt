@@ -79,6 +79,16 @@ class TemplateMapper {
         )
     }
 
+    fun toTDto(template: Template): TemplateDto {
+        return TemplateDto(
+            id = template.id,
+            templateName = template.templateName,
+            organizationId = template.organization.id,
+            keys = template.keys.map { it.key },
+            attachmentId = template.file.id
+        )
+    }
+
 //    fun updateEntity(template: Template, updateRequest: TemplateUpdateRequest): Template {
 //        return updateRequest.run {
 //            template.apply {

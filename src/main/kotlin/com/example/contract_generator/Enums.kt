@@ -22,6 +22,7 @@ enum class ErrorCode(val code: Int) {
     TEMPLATE_ALREADY_EXISTS(61),
     INVALID_TEMPLATE_NAME(77),
     CONTRACT_NOT_FOUND(80),
+    BAD_REQUEST(81),
     CONTRACT_DATA_NOT_FOUND(90)
     }
 
