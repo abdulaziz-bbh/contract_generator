@@ -10,9 +10,6 @@ import org.springframework.data.domain.Pageable
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.stereotype.Service
-import com.fasterxml.jackson.databind.ObjectMapper
-import jakarta.servlet.http.HttpServletRequest
-import jakarta.servlet.http.HttpServletResponse
 import org.apache.poi.xwpf.usermodel.XWPFRun
 import org.springframework.http.HttpHeaders
 import org.springframework.security.authentication.AuthenticationManager
@@ -22,8 +19,6 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.web.multipart.MultipartFile
 import java.io.*
 import java.nio.file.Files
-import java.nio.file.Paths
-import java.nio.file.StandardCopyOption
 import java.time.LocalDate
 import java.util.*
 import java.util.zip.ZipEntry
@@ -32,13 +27,15 @@ import java.util.zip.ZipOutputStream
 
 interface UserService{
     fun createOperator(request: CreateOperatorRequest)
+    fun updateOperator(request: UpdateOperatorRequest, id: Long)
     fun existsUserData(passportId: String, phoneNumber: String)
+    fun dismissal (operatorId: Long, organizationId: Long)
     fun getAllByOrganizationId(organizationId: Long):List<UserDto>?
 }
 interface AuthService{
     fun registration(request: CreateDirectorRequest)
     fun login(request: LoginRequest) : AuthenticationDto
-    fun refreshToken(request: HttpServletRequest, response: HttpServletResponse)
+//    fun refreshToken(request: HttpServletRequest, response: HttpServletResponse)
 }
 interface OrganizationService{
     fun create(request: CreateOrganizationRequest)
@@ -531,12 +528,43 @@ class TemplateServiceImpl(
 @Service
 class UserServiceImpl(
     private val userRepository: UserRepository,
-    private val userMapper: UserMapper
+    private val userMapper: UserMapper,
+    private val organizationRepository: OrganizationRepository,
+    private val usersOrganizationRepository: UsersOrganizationRepository
 ): UserService {
 
+    @Transactional
     override fun createOperator(request: CreateOperatorRequest) {
         existsUserData(request.passportId, request.phoneNumber)
-        userRepository.save(userMapper.toEntity(request))
+        val operator = userRepository.save(userMapper.toEntity(request))
+        val usersOrganization = UsersOrganization(
+            user = operator,
+            organization = organizationRepository.findByIdAndDeletedFalse(request.organizationId)
+                ?: throw OrganizationNotFoundException(),
+            isCurrentUser = true
+        )
+        usersOrganizationRepository.save(usersOrganization)
+    }
+
+    override fun updateOperator(request: UpdateOperatorRequest, id: Long) {
+     val user =  id.let {
+            userRepository.findByIdAndDeletedFalse(it)?: throw  UserNotFoundException()
+        }
+        request.passportId.let {
+            if (it != null) {
+                if (userRepository.findByPassportId(it, id) != null) {
+                    throw PassportIdAlreadyUsedException()
+                }
+            }
+        }
+        request.phoneNumber.let {
+            if (it != null) {
+                if (userRepository.findByPhoneNumber(it, id) != null) {
+                    throw UserAlreadyExistsException()
+                }
+            }
+        }
+        userRepository.save(userMapper.fromUpdateDto(request, user ))
     }
 
     override fun existsUserData(passportId: String, phoneNumber: String) {
@@ -546,23 +574,46 @@ class UserServiceImpl(
             throw UserAlreadyExistsException()
     }
 
-    override fun getAllByOrganizationId(organizationId: Long): List<UserDto>? {
-        return userRepository.findByOrganizationId(organizationId)?.map { userMapper.toDto(it) }
+    override fun dismissal(operatorId: Long, organizationId: Long) {
+        operatorId.let {
+            userRepository.findByIdAndDeletedFalse(it)?: throw  UserNotFoundException()
+        }
+        organizationId.let {
+            organizationRepository.findByIdAndDeletedFalse(it)?: throw OrganizationNotFoundException()
+        }
+        val usersOrganization = usersOrganizationRepository.findByOrganizationIdAndUserId(organizationId, operatorId)?: throw UserNotFoundException()
+        usersOrganization.isCurrentUser = false
+        usersOrganization.leftDate = Date(System.currentTimeMillis())
+        usersOrganizationRepository.save(usersOrganization)
     }
 
+    override fun getAllByOrganizationId(organizationId: Long): List<UserDto>? {
+        return usersOrganizationRepository.findUsersByOrganizationId(organizationId)?.map { userMapper.toDto(it) }
+    }
 }
 
 @Service
 class OrganizationServiceImpl(
-    private val organizationRepository: OrganizationRepository
+    private val organizationRepository: OrganizationRepository,
+    private val userRepository: UserRepository,
+    private val usersOrganizationRepository: UsersOrganizationRepository
 ): OrganizationService {
+
+    @Transactional
     override fun create(request: CreateOrganizationRequest) {
         existsByName(request.name)
-        val organization = Organization(
+        var organization = Organization(
             name = request.name,
             address = request.address
         )
-        organizationRepository.save(organization)
+        organization = organizationRepository.save(organization)
+        val usersOrganization = UsersOrganization(
+            user = userRepository.findByIdAndDeletedFalse(getCurrentUserId()!!.id!!)
+                ?: throw UserNotFoundException(),
+            organization = organization,
+            isCurrentUser = true
+        )
+        usersOrganizationRepository.save(usersOrganization)
     }
 
     override fun update(request: UpdateOrganizationRequest, id: Long) {
@@ -588,7 +639,6 @@ class CustomUserDetailsService(private val userRepository: UserRepository) : Use
 class AuthServiceImpl(
     private val authenticationManager: AuthenticationManager,
     private val userRepository: UserRepository,
-    private val tokenRepository: TokenRepository,
     private val jwtProvider: JwtProvider,
     private val userMapper: UserMapper,
     private val userDetailsService: CustomUserDetailsService
@@ -607,54 +657,12 @@ class AuthServiceImpl(
         val user = userDetailsService.loadUserByUsername(request.username)
         val accessToken = jwtProvider.generateAccessToken(user)
         val refreshToken = jwtProvider.generateRefreshToken(user)
-        saveToken(user, accessToken)
         return AuthenticationDto(
             accessToken = accessToken,
             refreshToken = refreshToken
         )
     }
 
-    override fun refreshToken(request: HttpServletRequest, response: HttpServletResponse) {
-        val authHeader = request.getHeader(HttpHeaders.AUTHORIZATION)
-        if (authHeader == null || authHeader.startsWith("Bearer ")) return
-        val refreshToken  = authHeader.substring(7)
-        val username = jwtProvider.extractUsername(refreshToken)
-        username.let {
-            val user = userRepository.findByPhoneNumber(username) ?: throw UserNotFoundException()
-            if (jwtProvider.isTokenValid(refreshToken, user)){
-                val accessToken = jwtProvider.generateAccessToken(user)
-                revokeUserAllTokens(user)
-                saveToken(user, accessToken)
-                val dto = AuthenticationDto(
-                    accessToken = accessToken,
-                    refreshToken = refreshToken
-                )
-                ObjectMapper().writeValue(response.outputStream, dto)
-            }
-        }
-    }
-
-    private fun revokeUserAllTokens(user: User) {
-        val tokens = user.id?.let { tokenRepository.findAllValidTokenByUser(it) }
-        if (tokens.isNullOrEmpty()) return
-
-        tokens.forEach { token -> run {
-                token.revoked = true
-                token.expired = true
-            }
-        }
-        tokenRepository.saveAll(tokens)
-    }
-    private fun saveToken(user: User, jwt: String) {
-        val token = Token(
-            token = jwt,
-            user = user,
-            expired = false,
-            revoked = false,
-            tokenType = "Bearer"
-        )
-        tokenRepository.save(token)
-    }
     private fun existsUserData(passportId: String, phoneNumber: String) {
         if (userRepository.existsByPassportId(passportId))
             throw UserAlreadyExistsException()

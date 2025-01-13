@@ -68,6 +68,11 @@ data class CreateOperatorRequest(
     @field:NotNull val passportId: String,
     @field:NotNull val organizationId: Long
 )
+data class UpdateOperatorRequest(
+    val fullName: String?,
+    val passportId: String?,
+    val phoneNumber: String?
+)
 
 data class UserDto(
     val id: Long?,

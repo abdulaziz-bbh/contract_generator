@@ -67,16 +67,15 @@ class InvalidTemplateNameException : GenericException() {
     }
 }
 
-class TokenNotFoundException: GenericException() {
-    override fun errorCode(): ErrorCode = ErrorCode.TOKEN_NOT_FOUND
-}
-
 class OrganizationAlreadyExistsException: GenericException() {
     override fun errorCode(): ErrorCode = ErrorCode.ORGANIZATION_ALREADY_EXISTS
 }
 
 class OrganizationNotFoundException: GenericException() {
     override fun errorCode(): ErrorCode = ErrorCode.ORGANIZATION_NOT_FOUND
+}
+class NotFoundOperatorOrOrganizationException: GenericException() {
+    override fun errorCode(): ErrorCode = ErrorCode.NOT_FOUND_OPERATOR_IN_ORGANIZATION
 }
 class UserAlreadyExistsException: GenericException() {
     override fun errorCode(): ErrorCode = ErrorCode.USER_ALREADY_EXISTS

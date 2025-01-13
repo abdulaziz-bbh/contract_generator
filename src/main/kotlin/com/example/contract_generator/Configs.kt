@@ -8,6 +8,9 @@ import org.springframework.context.annotation.Configuration
 import org.springframework.context.support.ResourceBundleMessageSource
 import org.springframework.data.domain.AuditorAware
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing
+import org.springframework.http.HttpHeaders
+import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.authentication.AuthenticationManager
 import org.springframework.security.authentication.AuthenticationProvider
@@ -51,30 +54,24 @@ class SecurityConfig(
 ) {
 
     @Bean
-    fun securityFilterChain(http: HttpSecurity, jwtFilter: JwtFilter, authenticationProvider: AuthenticationProvider): SecurityFilterChain? {
+    fun securityFilterChain(http: HttpSecurity): SecurityFilterChain? {
        http
            .csrf{it.disable()}
-           .cors{it.disable()}
            .authorizeHttpRequests{
                auth -> auth
                .requestMatchers(
-                   "api/v1/auth/**",
-                   "/v2/api-docs",
-                   "/v3/api-docs",
-                   "/v3/api-docs/**",
-                   "/swagger-resources",
-                   "/swagger-resources/**",
-                   "/configuration/ui",
-                   "/configuration/security",
-                   "/swagger-ui/**",
-                   "/webjars/**",
-                   "/swagger-ui.html").permitAll()
+                   "api/v1/auth/**").permitAll()
+               .requestMatchers("/api/v1/templates/**").hasAnyRole(Role.DIRECTOR.name)
                .anyRequest().authenticated()
            }
            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter::class.java)
            .authenticationProvider(authenticationProvider)
            .sessionManagement{
                it.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+           }
+           .exceptionHandling{
+               it.accessDeniedHandler(accessDeniedHandler)
+               it.authenticationEntryPoint(authenticationEntryPoint)
            }
         return http.build()
     }
@@ -107,7 +104,7 @@ class AuthConfig(
 
 @Configuration
 @EnableJpaAuditing
-class AppConfiguration() : AuditorAware<Long> {
+class AppConfiguration : AuditorAware<Long> {
 
     override fun getCurrentAuditor(): Optional<Long> {
         return Optional.ofNullable(getCurrentUserId()?.id)
@@ -123,6 +120,8 @@ class CustomAccessDeniedHandler(
         response: HttpServletResponse?,
         accessDeniedException: AccessDeniedException?
     ) {
+        response?.contentType = MediaType.APPLICATION_JSON_VALUE
+        response?.status = HttpStatus.FORBIDDEN.value()
         this.resolver.resolveException(request!!, response!!, null, accessDeniedException!!)
     }
 }
@@ -137,7 +136,8 @@ class CustomAuthenticationEntryPoint(
         response: HttpServletResponse?,
         authException: AuthenticationException?
     ) {
-        response?.addHeader("WWW-Authenticate", "Bearer Token")
+        response?.status = HttpStatus.UNAUTHORIZED.value()
+        response?.addHeader(HttpHeaders.WWW_AUTHENTICATE, "Bearer Token")
         this.resolver.resolveException(request!!, response!!, null, authException!!)
     }
 }

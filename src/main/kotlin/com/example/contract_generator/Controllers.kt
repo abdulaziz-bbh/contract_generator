@@ -1,28 +1,33 @@
 package com.example.contract_generator
 
-import com.fasterxml.jackson.annotation.JsonFormat
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
 import org.springframework.context.support.ResourceBundleMessageSource
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.multipart.MultipartFile
-import jakarta.servlet.http.HttpServletRequest
-import jakarta.servlet.http.HttpServletResponse
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
-import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import java.time.LocalDate
 
 @ControllerAdvice
 class ExceptionHandler(private val errorMessageSource: ResourceBundleMessageSource) {
 
     @ExceptionHandler(GenericException::class)
-    fun handleAccountException(exception: GenericException): ResponseEntity<BaseMessage> {
+    fun handlingException(exception: GenericException): ResponseEntity<BaseMessage> {
         return ResponseEntity.badRequest().body(exception.getErrorMessage(errorMessageSource))
+    }
+    @ExceptionHandler(AccessDeniedException::class)
+    fun handleAccessDeniedException(
+        ex: AccessDeniedException,
+        request: HttpServletRequest,
+        response: HttpServletResponse
+    ): ResponseEntity<BaseMessage> {
+        return ResponseEntity.badRequest().body(BaseMessage(HttpStatus.FORBIDDEN.value(), ex.message))
     }
 }
 
@@ -196,10 +201,11 @@ class AuthController(
         return authService.login(request)
     }
 
-    @PostMapping("/refresh-token")
-    fun refreshToken(request: HttpServletRequest, response: HttpServletResponse) {
-        return authService.refreshToken(request, response)
-    }
+
+//        @PostMapping("/refresh-token")
+//        fun refreshToken(request: HttpServletRequest, response: HttpServletResponse) {
+//            return authService.refreshToken(request, response)
+//        }
 }
 
 @RestController
@@ -208,10 +214,23 @@ class UserController(
     private val userService: UserService
 ) {
 
-    @PostMapping
-    fun create(@RequestBody @Valid request: CreateOperatorRequest) {
-        return userService.createOperator(request)
-    }
+        @PostMapping
+        fun create(@RequestBody @Valid request: CreateOperatorRequest) {
+            return userService.createOperator(request)
+        }
+        @PutMapping("/{id}")
+        fun update(@RequestBody @Valid request: UpdateOperatorRequest, @PathVariable("id") id: Long) {
+            return userService.updateOperator(request, id)
+        }
+
+        @PutMapping("dismissal/{operator-id}/{organization-id}")
+        fun dismissal(@PathVariable("operator-id") operatorId: Long, @PathVariable("organization-id") organizationId: Long) {
+            return userService.dismissal(operatorId, organizationId)
+        }
+        @GetMapping("get-all/{organization-id}")
+        fun getOrganizations(@PathVariable("organization-id") organizationId: Long): List<UserDto>? {
+            return userService.getAllByOrganizationId(organizationId)
+        }
 }
 
 @RestController
@@ -223,6 +242,7 @@ class OrganizationController(
     @PostMapping
     fun create(@RequestBody @Valid request: CreateOrganizationRequest) {
         organizationService.create(request)
+      
     }
 }
 

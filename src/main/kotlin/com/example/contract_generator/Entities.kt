@@ -26,13 +26,12 @@ abstract class BaseEntity(
 class User(
     @Column(nullable = false) var fullName: String,
     @Column(nullable = false) var phoneNumber: String,
-    @Column(nullable = false) val passportId: String,
+    @Column(nullable = false) var passportId: String,
     @Column(nullable = false) var passWord: String,
-    @ManyToMany val organization: MutableList<Organization>? = null,
     @Enumerated(EnumType.STRING) @Column(nullable = false) val role: Role
 ) : BaseEntity(), UserDetails {
 
-    override fun getAuthorities(): List<SimpleGrantedAuthority> = role.getAuthority()
+    override fun getAuthorities(): List<SimpleGrantedAuthority> = mutableListOf(SimpleGrantedAuthority("ROLE_${role.name}"))
     override fun getPassword(): String = passWord
     override fun getUsername(): String = phoneNumber
     override fun isAccountNonExpired(): Boolean = true
@@ -41,19 +40,21 @@ class User(
     override fun isEnabled(): Boolean = true
 
 }
-@Entity
-class Token(
-    @Column(nullable = false) var token: String,
-    @Column(nullable = false) var tokenType: String,
-    @Column(nullable = false) var revoked: Boolean,
-    @Column(nullable = false) var expired: Boolean,
-    @ManyToOne(fetch = FetchType.LAZY) var user: User
-): BaseEntity()
 
 @Entity
 class Organization(
     @Column(nullable = false) var name: String,
     @Column(nullable = false) var address: String
+) : BaseEntity()
+
+@Entity
+class UsersOrganization(
+
+    @ManyToOne val user: User,
+    @ManyToOne val organization: Organization,
+    var isCurrentUser: Boolean,
+    var leftDate: Date? = null
+
 ) : BaseEntity()
 
 @Entity
