@@ -84,7 +84,7 @@ interface ContractService{
 @Service
 class ContractServiceImpl(
     private val templateRepository: TemplateRepository,
-    private val attachmgit entRepository: AttachmentRepository,
+    private val attachmentRepository: AttachmentRepository,
     private val attachmentMapper: AttachmentMapper,
     private val contractRepository: ContractRepository,
     private val contractDataRepository: ContractDataRepository,
