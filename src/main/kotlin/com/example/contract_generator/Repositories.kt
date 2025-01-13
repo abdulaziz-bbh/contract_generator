@@ -86,6 +86,13 @@ interface TemplateRepository : BaseRepository<Template> {
 
     fun existsByTemplateNameAndOrganizationId(templateName: String, organizationId: Long): Boolean
 
+    @Query("select t from Template t where t.templateName = :templateName and t.deleted = false and t.organization.id = :organizationId")
+    fun findByTemplateNameWithOrganizationIdAndDeletedFalse(
+        @Param("templateName") templateName: String,
+        @Param("organizationId") organizationId: Long
+    ): Template?
+
+    fun findByOrganizationIdAndDeletedFalse(organizationId: Long): List<Template>
 }
 
 interface UserRepository : BaseRepository<User>{
