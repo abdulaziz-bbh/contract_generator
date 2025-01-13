@@ -27,6 +27,12 @@ class KeyAlreadyExistsException : GenericException() {
     }
 }
 
+class BadRequestException : GenericException() {
+    override fun errorCode(): ErrorCode {
+        return ErrorCode.BAD_REQUEST
+    }
+}
+
 class KeyNotFoundException : GenericException() {
     override fun errorCode(): ErrorCode {
         return ErrorCode.KEY_NOT_FOUND

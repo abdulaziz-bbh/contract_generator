@@ -31,6 +31,14 @@ data class TemplateResponse(
     val keys : List<KeyResponse>?
 )
 
+data class TemplateDto(
+    val id: Long?,
+    val templateName: String?,
+    val organizationId: Long?,
+    val keys: List<String>?,
+    val attachmentId: Long?
+)
+
 data class TemplateUpdateRequest(
     val templateName: String,
     val keys : List<KeyResponse>
