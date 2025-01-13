@@ -92,17 +92,41 @@ interface UserRepository : BaseRepository<User>{
 
     fun existsByPassportId(passportId:String): Boolean
     fun existsByPhoneNumber(phoneNumber: String): Boolean
-
     fun findByPhoneNumber(phoneNumber: String): User?
-    fun findByOrganizationId(orgId: Long): List<User>?
+
+    @Query("""
+        select u from users u where u.id != :id and u.phoneNumber = :phoneNumber
+    """)
+    fun findByPhoneNumber(phoneNumber: String, id: Long): User?
+
+    @Query("""
+        select u from users u where u.id != :id and u.passportId = :passportId
+    """)
+    fun findByPassportId(passportId: String, id: Long): User?
 
 }
 
 interface OrganizationRepository : BaseRepository<Organization>{
     fun existsByName(name: String): Boolean
+}
 
-    @Query(value = "select * from Organization where id = :id", nativeQuery = true)
-    fun findByIdNative(@Param("id") id: Long): Organization?
+interface UsersOrganizationRepository : BaseRepository<UsersOrganization>{
+
+    @Query("""
+        select u from users u 
+            join UsersOrganization uo on u.id = uo.user.id
+            join Organization o on o.id = uo.organization.id
+            where uo.organization.id = :organizationId and uo.isCurrentUser = true order by u.createdAt desc 
+
+    """)
+    fun findUsersByOrganizationId(organizationId: Long): List<User>?
+
+    @Query("""
+        select uo from UsersOrganization uo where uo.user.id = :userId 
+            and uo.organization.id = :organizationId 
+            and uo.isCurrentUser != false 
+    """)
+    fun findByOrganizationIdAndUserId(organizationId: Long, userId: Long): UsersOrganization?
 }
 
 interface AttachmentRepository : BaseRepository<Attachment> {
