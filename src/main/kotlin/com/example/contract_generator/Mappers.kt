@@ -185,4 +185,36 @@ class UserMapper(
             )
         )
     }
+    fun toDto(entity: User): UserDto {
+        return UserDto(
+            fullName = entity.fullName,
+            phoneNumber = entity.phoneNumber,
+            passportId = entity.passportId,
+            role = entity.role,
+            id = entity.id
+        )
+    }
+}
+
+@Component
+class ContractMapper(private val userMapper: UserMapper,
+    private val attachmentMapper: AttachmentMapper,
+    private val templateMapper: TemplateMapper,
+    private val keyMapper: KeyMapper) {
+    fun toDto(contract: Contract, contractDataList: List<ContractData>): ContractResponseDto {
+        return ContractResponseDto(
+            id = contract.id!!,
+            template = templateMapper.toDto(contract.template),
+            attachment = contract.file?.let { attachmentMapper.toInfo(it) },
+            operators = contract.operators.map { userMapper.toDto(it) },
+            contractData = contractDataList.map {
+                ContractDataDto(
+                    id = it.id ?: throw IllegalStateException("ContractData ID cannot be null."),
+                    key = keyMapper.toDto(it.key),
+                    value = it.value
+                )
+            },
+            isGenerated = contract.isGenerated
+        )
+    }
 }

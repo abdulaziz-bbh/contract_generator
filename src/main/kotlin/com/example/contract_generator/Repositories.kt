@@ -71,13 +71,14 @@ interface KeyRepository : BaseRepository<Key> {
     fun findByName(id: Long, name: String): Key?
 
     fun findAllByKeyInAndDeletedFalse(keys: Collection<String>): List<Key>
-
+    fun findAllByIdInAndDeletedFalse(ids: Collection<Long>): List<Key>
 
 }
 
 
 interface ContractRepository : BaseRepository<Contract> {
     fun findByFile_Name(fileName: String): Contract?
+    fun findByIsGeneratedAndDeletedFalse(isGenerated: Boolean): List<Contract>
 }
 
 @Repository
@@ -93,6 +94,7 @@ interface UserRepository : BaseRepository<User>{
     fun existsByPhoneNumber(phoneNumber: String): Boolean
 
     fun findByPhoneNumber(phoneNumber: String): User?
+    fun findByOrganizationId(orgId: Long): List<User>?
 
 }
 interface TokenRepository : BaseRepository<Token>{
@@ -118,4 +120,5 @@ interface AttachmentRepository : BaseRepository<Attachment> {
 
 interface ContractDataRepository : BaseRepository<ContractData>{
     fun findAllByContract(contract: Contract): List<ContractData>
+    fun findAllByIdInAndDeletedFalse(ids: Collection<Long>): List<ContractData>
 }

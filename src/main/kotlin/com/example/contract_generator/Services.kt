@@ -17,7 +17,6 @@ import org.apache.poi.xwpf.usermodel.XWPFRun
 import org.springframework.http.HttpHeaders
 import org.springframework.security.authentication.AuthenticationManager
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
-import org.springframework.security.core.userdetails.UserDetails
 import org.springframework.security.core.userdetails.UserDetailsService
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.web.multipart.MultipartFile
@@ -34,6 +33,7 @@ import java.util.zip.ZipOutputStream
 interface UserService{
     fun createOperator(request: CreateOperatorRequest)
     fun existsUserData(passportId: String, phoneNumber: String)
+    fun getAllByOrganizationId(organizationId: Long):List<UserDto>?
 }
 interface AuthService{
     fun registration(request: CreateDirectorRequest)
@@ -42,7 +42,7 @@ interface AuthService{
 }
 interface OrganizationService{
     fun create(request: CreateOrganizationRequest)
-    fun update(request: UpdateOrganizationRequest)
+    fun update(request: UpdateOrganizationRequest, id: Long)
     fun existsByName(name: String)
 }
 
@@ -73,9 +73,13 @@ interface AttachmentService {
 }
 
 interface ContractService{
-    fun generateContract(list: List<ContractRequestDto>): ResponseEntity<*>
-    fun updateContract(list: List<ContractUpdateDto>): ResponseEntity<*>
+    fun createContract(templateId: Long, list: List<ContractRequestDto>): List<ContractResponseDto>
+    fun updateContract(list: List<ContractRequestDto>)
+    fun getZip(list: List<String>): ResponseEntity<*>
     fun getPdfsZip(date: LocalDate):ResponseEntity<*>
+    fun delete(contractIds: List<Long>)
+    fun getAll(isGenerated:Boolean?): List<ContractResponseDto>
+    fun findById(contractId: Long):ContractResponseDto
 }
 
 @Service
@@ -84,98 +88,88 @@ class ContractServiceImpl(
     private val attachmentRepository: AttachmentRepository,
     private val attachmentMapper: AttachmentMapper,
     private val contractRepository: ContractRepository,
-    private val contractDataRepository: ContractDataRepository
+    private val contractDataRepository: ContractDataRepository,
+    private val keyRepository: KeyRepository,
+    private val contractMapper: ContractMapper
 
 ): ContractService{
     @Transactional
-    override fun generateContract(list: List<ContractRequestDto>): ResponseEntity<*> {
-        val files: MutableList<File> = mutableListOf()
-        list.forEach { contractRequestDto ->
-            val template: Template = templateRepository.findByIdAndDeletedFalse(contractRequestDto.id)
-                ?: throw TemplateNotFoundException()
+    override fun createContract(templateId: Long, list: List<ContractRequestDto>): List<ContractResponseDto> {
+        val template: Template = templateRepository.findByIdAndDeletedFalse(templateId)
+            ?: throw TemplateNotFoundException()
+        val currentUser = getCurrentUserId()?:throw UserNotFoundException()
 
-            val (_, uuid, path) = attachmentMapper.createDirectoryPath(subFolder = "contract")
-            val tempFile = File("$path/$uuid.docx")
+        var responseDtos = mutableListOf<ContractResponseDto>()
+        list.map { contractRequestDto ->
+            val keyIds = contractRequestDto.contractData.keys
+            val keys = keyRepository.findAllByIdInAndDeletedFalse(keyIds.toList())
 
-            Files.copy(Paths.get(template.file.path), tempFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
-
-
-            val replacedFile = replaceKeysWithStyles(tempFile, contractRequestDto.keys)
-
-            val attachment2 = Attachment(
-                name = replacedFile.name,
-                contentType = "application/docx",
-                size = replacedFile.length(),
-                extension = "docx",
-                path = replacedFile.absolutePath
-            )
-
-            attachmentRepository.save(attachment2)
-
-            val contract = Contract(
-                file = attachment2,
-                template = template,
-            )
-
-            getCurrentUserId()?.let { contract.operators.add(it) }?: throw UserNotFoundException()
-
-            contractRequestDto.keys.forEach { (key, value) ->
-                val contractData = ContractData(
-                    contract = contract,
-                    key = key,
-                    value = value
-                )
-                contractDataRepository.save(contractData)
+            val unresolvedKeyIds = keyIds - keys.map { it.id }
+            if (unresolvedKeyIds.isNotEmpty()) {
+                throw KeyNotFoundException()
             }
-            contract.status = ContractStatus.PENDING
-
+            val contract = Contract(
+                template = template,
+            ).apply {
+                operators.add(currentUser)
+            }
             contractRepository.save(contract)
-            files.add(replacedFile)
-        }
 
-        return createZipFile(files)
+            val contractDataList = keys.map { key ->
+                ContractData(
+                    key = key,
+                    value = contractRequestDto.contractData[key.id]?:throw KeyNotFoundException(),
+                    contract = contract
+                )
+            }
+            contractDataRepository.saveAll(contractDataList)
+            responseDtos.add(contractMapper.toDto(contract, contractDataList))
+        }
+        return responseDtos
     }
 
 
+
     @Transactional
-    override fun updateContract(list: List<ContractUpdateDto>): ResponseEntity<*>{
+    override fun updateContract(list: List<ContractRequestDto>){
+        list.forEach { contractRequestDto ->
+            val contractDataIds = contractRequestDto.contractData.keys
+            val contractDataList = contractDataRepository.findAllByIdInAndDeletedFalse(contractDataIds.toList())
 
-        val files: MutableList<File> = mutableListOf()
-        list.forEach { contractUpdateDto ->
-            val contract = contractRepository.findByFile_Name(contractUpdateDto.fileName)
-                ?: throw ContractNotFound()
-
-            val contractDatas = contractDataRepository
-                .findAllByContract(contract)
-            val keys = contractUpdateDto.keys
-
-            for (contractData in contractDatas) {
-                keys[contractData.key]?.let { newValue ->
+            val unresolvedDataIds = contractDataIds - contractDataList.mapNotNull { it.id }
+            if (unresolvedDataIds.isNotEmpty()) {
+                throw ContractDataNotFound()
+            }
+            contractDataList.forEach { contractData ->
+                val newValue = contractRequestDto.contractData[contractData.id]
+                if (newValue != null) {
                     contractData.value = newValue
-                    contractDataRepository.save(contractData)
                 }
             }
-
-            val existingContractData: Map<String, String> = contractDatas.map { it.key to it.value }.toMap()
-
-            val tempFile = File(contract.file.path)
-
-            Files.copy(Paths.get(contract.template.file.path), tempFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
-
-            val replacedFile = replaceKeysWithStyles(tempFile, existingContractData)
-
-            contract.file.run {
-                size = replacedFile.length()
-            }
-
-            attachmentRepository.save(contract.file)
-
-            getCurrentUserId()?.let { contract.operators.add(it) }?:throw UserNotFoundException()
-            contractRepository.save(contract)
-            files.add(replacedFile)
+            contractDataRepository.saveAll(contractDataList)
         }
+    }
 
-        return createZipFile(files)
+
+    override fun getZip(list: List<String>): ResponseEntity<*> {
+        var files :MutableList<File> = mutableListOf()
+        for (s in list) {
+            files.add(contractRepository.findByFile_Name(s)?.let {
+                File(it.file?.path)
+            }
+                ?: throw ContractNotFound())
+        }
+        val pdfPath = "${attachmentMapper.filePath}/pdf"
+        val file = File(pdfPath)
+        if (!file.exists()) {
+            file.mkdirs()
+        }
+        val pdfFiles = mutableListOf<File>()
+        for (f in files) {
+            convertDocxToPdf(f.absolutePath, pdfPath)
+            pdfFiles.add(File("${pdfPath}/${f.nameWithoutExtension}.pdf"))
+        }
+        return createZipFile(pdfFiles)
     }
 
     override fun getPdfsZip(date: LocalDate): ResponseEntity<*> {
@@ -210,6 +204,40 @@ class ContractServiceImpl(
 
         return createZipFile(pdfFiles)
     }
+
+    @Transactional
+    override fun delete(contractIds: List<Long>) {
+        val trashedContracts = contractRepository.trashList(contractIds)
+        if (trashedContracts.any { it == null }) {
+            throw ContractNotFound()
+        }
+        trashedContracts.filterNotNull().forEach { contract ->
+            val contractDataIds = contractDataRepository.findAllByContract(contract).mapNotNull { it.id }
+            contractDataRepository.trashList(contractDataIds)
+        }
+    }
+
+
+
+    override fun getAll(isGenerated: Boolean?): List<ContractResponseDto> {
+        val contracts = if (isGenerated != null) {
+            contractRepository.findByIsGeneratedAndDeletedFalse(isGenerated)
+        } else {
+            contractRepository.findAllNotDeleted()
+        }
+        return contracts.map { contract ->
+            contractMapper.toDto(contract, contractDataRepository.findAllByContract(contract))
+        }
+    }
+
+
+    override fun findById(contractId: Long): ContractResponseDto {
+        val contract = contractRepository.findByIdAndDeletedFalse(contractId)
+            ?: throw ContractNotFound()
+
+        return contractMapper.toDto(contract, contractDataRepository.findAllByContract(contract))
+    }
+
 
     private fun replaceKeysWithStyles(docxFile: File, keys: Map<String, String>): File {
         val wordDoc = XWPFDocument(Files.newInputStream(docxFile.toPath()))
@@ -504,6 +532,10 @@ class UserServiceImpl(
             throw UserAlreadyExistsException()
     }
 
+    override fun getAllByOrganizationId(organizationId: Long): List<UserDto>? {
+        return userRepository.findByOrganizationId(organizationId)?.map { userMapper.toDto(it) }
+    }
+
 }
 
 @Service
@@ -519,8 +551,7 @@ class OrganizationServiceImpl(
         organizationRepository.save(organization)
     }
 
-    override fun update(request: UpdateOrganizationRequest) {
-        TODO("Not yet implemented")
+    override fun update(request: UpdateOrganizationRequest, id: Long) {
     }
 
     override fun existsByName(name: String) {
@@ -533,7 +564,7 @@ class OrganizationServiceImpl(
 
 @Service
 class CustomUserDetailsService(private val userRepository: UserRepository) : UserDetailsService {
-    override fun loadUserByUsername(username: String?): UserDetails {
+    override fun loadUserByUsername(username: String?): User {
         if(username.isNullOrBlank() || username.isBlank())
             throw UsernameInvalidException()
         return userRepository.findByPhoneNumber(username) ?: throw UserNotFoundException()
@@ -545,7 +576,8 @@ class AuthServiceImpl(
     private val userRepository: UserRepository,
     private val tokenRepository: TokenRepository,
     private val jwtProvider: JwtProvider,
-    private val userMapper: UserMapper
+    private val userMapper: UserMapper,
+    private val userDetailsService: CustomUserDetailsService
 ) : AuthService {
 
     override fun registration(request: CreateDirectorRequest) {
@@ -558,7 +590,7 @@ class AuthServiceImpl(
             throw UsernameInvalidException()
         authenticationManager.authenticate(
             UsernamePasswordAuthenticationToken(request.username, request.password))
-        val user = userRepository.findByPhoneNumber(request.username) ?: throw UserNotFoundException()
+        val user = userDetailsService.loadUserByUsername(request.username)
         val accessToken = jwtProvider.generateAccessToken(user)
         val refreshToken = jwtProvider.generateRefreshToken(user)
         saveToken(user, accessToken)

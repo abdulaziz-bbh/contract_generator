@@ -1,7 +1,11 @@
 package com.example.contract_generator
 
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
 import org.springframework.context.i18n.LocaleContextHolder
 import org.springframework.context.support.ResourceBundleMessageSource
+import org.springframework.security.access.AccessDeniedException
+import org.springframework.security.web.access.AccessDeniedHandler
 
 
 sealed class GenericException() : RuntimeException() {
@@ -91,4 +95,7 @@ class AttachmentAlreadyExists():GenericException(){
 
 class ContractNotFound(): GenericException(){
     override fun errorCode(): ErrorCode = ErrorCode.CONTRACT_NOT_FOUND
+}
+class ContractDataNotFound(): GenericException(){
+    override fun errorCode(): ErrorCode = ErrorCode.CONTRACT_DATA_NOT_FOUND
 }

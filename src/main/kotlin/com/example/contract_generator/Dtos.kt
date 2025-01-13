@@ -74,7 +74,7 @@ data class UserDto(
     val fullName: String,
     val role: Role,
     val phoneNumber: String,
-    val passportId: String,
+    val passportId: String
 )
 
 data class LoginRequest(
@@ -91,9 +91,9 @@ data class CreateOrganizationRequest(
     @field:NotNull val name: String,
     @field:NotNull val address: String,
 )
-
 data class UpdateOrganizationRequest(
-    val name: String,
+    val name: String?,
+    val address: String?
 )
 
 data class AttachmentInfo(
@@ -106,12 +106,30 @@ data class AttachmentInfo(
 )
 
 data class ContractRequestDto(
+    val contractData: Map<Long,String>
+)
+
+data class ContractResponseDto(
     val id: Long,
-    val keys: Map<String,String>
+    val template: TemplateResponse,
+    val attachment: AttachmentInfo?,
+    val operators: List<UserDto>,
+    val contractData: List<ContractDataDto>,
+    val isGenerated: Boolean
+)
+
+data class ContractDataDto(
+    val id: Long,
+    val key: KeyResponse,
+    val value: String
 )
 
 data class ContractUpdateDto(
     val fileName: String,
     val keys: Map<String,String>
+)
+data class  GenerateContractRequest(
+    val isDocsOrPdf: Boolean,
+    val contractData: List<Long>
 )
     
