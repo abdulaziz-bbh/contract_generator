@@ -30,9 +30,10 @@ import java.util.zip.ZipOutputStream
 interface UserService{
     fun createOperator(request: CreateOperatorRequest)
     fun updateOperator(request: UpdateOperatorRequest, id: Long)
-    fun existsUserData(passportId: String, phoneNumber: String)
     fun dismissal (operatorId: Long, organizationId: Long)
     fun getAllByOrganizationId(organizationId: Long):List<UserDto>?
+    fun existsUserData(passportId: String, phoneNumber: String)
+    fun existsUserCurrentOrganization(passportId: String)
 }
 interface AuthService{
     fun registration(request: CreateDirectorRequest)
@@ -632,6 +633,7 @@ class UserServiceImpl(
     @Transactional
     override fun createOperator(request: CreateOperatorRequest) {
         existsUserData(request.passportId, request.phoneNumber)
+        existsUserCurrentOrganization(request.passportId)
         val operator = userRepository.save(userMapper.toEntity(request))
         val usersOrganization = UsersOrganization(
             user = operator,
@@ -663,13 +665,6 @@ class UserServiceImpl(
         userRepository.save(userMapper.fromUpdateDto(request, user ))
     }
 
-    override fun existsUserData(passportId: String, phoneNumber: String) {
-        if (userRepository.existsByPassportId(passportId))
-            throw PassportIdAlreadyUsedException()
-        if(userRepository.existsByPhoneNumber(phoneNumber))
-            throw UserAlreadyExistsException()
-    }
-
     override fun dismissal(operatorId: Long, organizationId: Long) {
         operatorId.let {
             userRepository.findByIdAndDeletedFalse(it)?: throw  UserNotFoundException()
@@ -683,8 +678,23 @@ class UserServiceImpl(
         usersOrganizationRepository.save(usersOrganization)
     }
 
+
     override fun getAllByOrganizationId(organizationId: Long): List<UserDto>? {
         return usersOrganizationRepository.findUsersByOrganizationId(organizationId)?.map { userMapper.toDto(it) }
+    }
+
+    override fun existsUserData(passportId: String, phoneNumber: String) {
+        if (userRepository.existsByPassportId(passportId))
+            throw PassportIdAlreadyUsedException()
+        if(userRepository.existsByPhoneNumber(phoneNumber))
+            throw UserAlreadyExistsException()
+    }
+
+    override fun existsUserCurrentOrganization(passportId: String) {
+        passportId.let {
+            if (usersOrganizationRepository.existsByUserIdIsCurrent(it))
+                throw OperatorAlreadyCurrentException()
+        }
     }
 }
 

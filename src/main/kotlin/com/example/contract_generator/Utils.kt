@@ -10,3 +10,9 @@ fun getCurrentUserId(): User? {
     return null
 }
 
+fun getCurrentOrganization(repository: UsersOrganizationRepository): Organization {
+    val operatorId = getCurrentUserId()?.id
+    val userOrganization = repository.findByUserIdAndDeletedFalse(operatorId!!)
+    return userOrganization!!.organization
+}
+
