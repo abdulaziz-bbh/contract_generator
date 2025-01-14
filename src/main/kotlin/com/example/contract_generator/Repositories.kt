@@ -161,10 +161,13 @@ interface UserRepository : BaseRepository<User>{
     """)
     fun findByPhoneNumber(phoneNumber: String, id: Long): User?
 
+
+    fun findByPassportId(passportId: String): User?
+
     @Query("""
         select u from users u where u.id != :id and u.passportId = :passportId
     """)
-    fun findByPassportId(passportId: String, id: Long): User?
+    fun existsUserIdAndPassportId(passportId: String, id: Long): User?
 
 }
 
@@ -221,7 +224,6 @@ interface ContractDataRepository : BaseRepository<ContractData>{
 }
 @Repository
 interface JobRepository : BaseRepository<Job>{
-    fun findAllByIdInAndDeletedFalse(ids: Collection<Long>): List<Job>
-    @Query("SELECT j FROM Job j LEFT JOIN FETCH j.contracts WHERE j.status = :status")
-    fun findAllByStatus(@Param("status") status: JobStatus): List<Job>
-}
+    fun findAllByAttachmentAndDeletedFalse(attachment: Attachment): Job?
+    fun findAllByIdInAndCreatedByAndDeletedFalse(ids: Collection<Long>,createdBy: Long): List<Job>
+  }

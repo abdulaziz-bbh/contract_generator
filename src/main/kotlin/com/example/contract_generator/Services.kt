@@ -32,7 +32,7 @@ interface UserService{
     fun createOperator(request: CreateOperatorRequest)
     fun updateOperator(request: UpdateOperatorRequest, id: Long)
     fun dismissal (operatorId: Long, organizationId: Long)
-    fun recruitment(operatorId: Long, passportId: String)
+    fun recruitment(organizationId: Long, passportId: String)
     fun getAllByOrganizationId(organizationId: Long):List<UserDto>?
     fun getCountContracts(request: ContractCountRequest): ContractCountResponse
     fun existsUserData(passportId: String, phoneNumber: String)
@@ -677,9 +677,9 @@ class UserServiceImpl(
         usersOrganizationRepository.save(usersOrganization)
     }
 
-    override fun recruitment(operatorId: Long, passportId: String) {
+    override fun recruitment(organizationId: Long, passportId: String) {
         existsUserCurrentOrganization(passportId)
-        val organization = organizationRepository.findByIdAndDeletedFalse(operatorId)
+        val organization = organizationRepository.findByIdAndDeletedFalse(organizationId)
             ?: throw OrganizationNotFoundException()
         val operator = userRepository.findByPassportId(passportId)
             ?: throw UserNotFoundException()
@@ -847,7 +847,7 @@ class AttachmentServiceImpl(
     override fun download(hashId: String): ResponseEntity<*> {
         val fileEntity = repository.findByHashIdAndDeletedFalse(hashId)?:throw AttachmentNotFound()
         val operator = getCurrentUserId()
-        jobRepository.findByAttachmentAndDeletedFalse(fileEntity)?.let {
+        jobRepository.findAllByAttachmentAndDeletedFalse(fileEntity)?.let {
             if (operator?.id != it.createdBy) {
                 throw PermissionDenied()
             }
