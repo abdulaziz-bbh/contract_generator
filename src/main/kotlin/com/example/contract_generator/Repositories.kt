@@ -141,6 +141,19 @@ interface UsersOrganizationRepository : BaseRepository<UsersOrganization>{
             and uo.isCurrentUser != false 
     """)
     fun findByOrganizationIdAndUserId(organizationId: Long, userId: Long): UsersOrganization?
+
+    @Query("""
+        select u from UsersOrganization u
+            where u.user.id = :userId 
+                and u.deleted = false
+                and u.isCurrentUser = true order by u.createdAt desc
+    """)
+    fun findByUserIdAndDeletedFalse(userId: Long): UsersOrganization?
+
+    @Query("""
+        select exists(select u from UsersOrganization u where u.user.passportId = :passportId and u.isCurrentUser = true order by u.createdAt desc)
+    """)
+    fun existsByUserIdIsCurrent(passportId: String): Boolean
 }
 
 interface AttachmentRepository : BaseRepository<Attachment> {

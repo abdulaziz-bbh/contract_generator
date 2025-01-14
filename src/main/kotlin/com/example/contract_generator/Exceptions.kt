@@ -77,6 +77,11 @@ class OrganizationNotFoundException: GenericException() {
 class NotFoundOperatorOrOrganizationException: GenericException() {
     override fun errorCode(): ErrorCode = ErrorCode.NOT_FOUND_OPERATOR_IN_ORGANIZATION
 }
+
+class OperatorAlreadyCurrentException: GenericException() {
+    override fun errorCode(): ErrorCode = ErrorCode.OPERATION_ALREADY_CURRENT
+}
+
 class UserAlreadyExistsException: GenericException() {
     override fun errorCode(): ErrorCode = ErrorCode.USER_ALREADY_EXISTS
 }

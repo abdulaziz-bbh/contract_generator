@@ -53,7 +53,7 @@ class UsersOrganization(
 
     @ManyToOne val user: User,
     @ManyToOne val organization: Organization,
-    var isCurrentUser: Boolean,
+    @Column(nullable = false) var isCurrentUser: Boolean = false,
     var leftDate: Date? = null
 
 ) : BaseEntity()

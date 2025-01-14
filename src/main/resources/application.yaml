@@ -1,13 +1,13 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/democloud
+    url: jdbc:postgresql://localhost:5432/contract_generator
     driver-class-name: org.postgresql.Driver
     username: postgres
-    password: 1234
+    password: postgres
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: create
     database-platform: org.hibernate.dialect.PostgreSQLDialect
 
   servlet:
