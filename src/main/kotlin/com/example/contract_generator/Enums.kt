@@ -27,8 +27,9 @@ enum class ErrorCode(val code: Int) {
     DUPLICATE_CONTRACT(82),
     BAD_REQUEST(81),
     CONTRACT_DATA_NOT_FOUND(90),
-    CONTRACT_DATA_NOT_FOUND(90),
-    INVALID_FILE_FORMAT(91)
+    INVALID_FILE_FORMAT(91),
+    PERMISSION_DENIED(93),
+    JOB_NOT_FOUND(94),
     }
 
 enum class Role{

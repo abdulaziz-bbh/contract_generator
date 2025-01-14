@@ -113,3 +113,9 @@ class DuplicateContract:GenericException(){
 class MissingTemplateKeys:GenericException(){
     override fun errorCode(): ErrorCode = ErrorCode.MISSING_TEMPLATE_KEY
 }
+class PermissionDenied:GenericException(){
+    override fun errorCode(): ErrorCode = ErrorCode.PERMISSION_DENIED
+}
+class JobNotFound:GenericException(){
+    override fun errorCode(): ErrorCode = ErrorCode.JOB_NOT_FOUND
+}

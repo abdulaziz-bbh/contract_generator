@@ -2,6 +2,7 @@ package com.example.contract_generator
 
 import jakarta.persistence.EntityManager
 import jakarta.transaction.Transactional
+import org.springframework.data.annotation.CreatedBy
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.domain.Specification
@@ -77,9 +78,33 @@ interface KeyRepository : BaseRepository<Key> {
 
 
 interface ContractRepository : BaseRepository<Contract> {
-    fun findByFile_Name(fileName: String): Contract?
-    fun findByIsGeneratedAndDeletedFalse(isGenerated: Boolean): List<Contract>
     fun findAllByIdInAndDeletedFalse(ids: Collection<Long>): List<Contract>
+    @Query("SELECT c FROM Contract c JOIN c.operators o WHERE o = :operator AND c.isGenerated = :isGenerated AND c.deleted = false")
+    fun findByOperatorAndIsGeneratedAndDeletedFalse(
+        @Param("operator") operator: User,
+        @Param("isGenerated") isGenerated: Boolean
+    ): List<Contract>
+
+    @Query("SELECT c FROM Contract c JOIN c.operators o WHERE o = :operator AND c.deleted = false")
+    fun getAllByOperatorAndDeletedFalse(
+        @Param("operator") operator: User
+    ): List<Contract>
+    @Query(
+        """
+    SELECT COUNT(c) = :contractIdsCount
+    FROM Contract c 
+    JOIN c.operators o 
+    WHERE c.id IN :contractIds 
+      AND o = :operator 
+      AND c.deleted = false
+    """
+    )
+    fun existsAllByOperatorsAndDeletedFalse(
+        @Param("contractIds") contractIds: List<Long>,
+        @Param("operator") operator: User,
+        @Param("contractIdsCount") contractIdsCount: Long
+    ): Boolean
+
 }
 
 @Repository
@@ -157,4 +182,5 @@ interface JobRepository : BaseRepository<Job>{
     fun findAllByIdInAndDeletedFalse(ids: Collection<Long>): List<Job>
     @Query("SELECT j FROM Job j LEFT JOIN FETCH j.contracts WHERE j.status = :status")
     fun findAllByStatus(@Param("status") status: JobStatus): List<Job>
+    fun findAllByIdInAndCreatedByAndDeletedFalse(ids: Collection<Long>,createdBy:Long): List<Job>
 }
