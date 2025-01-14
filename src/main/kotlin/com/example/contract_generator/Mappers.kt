@@ -38,7 +38,9 @@ class KeyMapper {
 }
 
 @Component
-class TemplateMapper {
+class TemplateMapper(
+    private val keyMapper: KeyMapper
+) {
 
     fun toDto(template: Template): TemplateResponse {
         return template.run {
@@ -46,7 +48,8 @@ class TemplateMapper {
                 id = template.id,
                 templateName = template.templateName,
                 file = toAttachmentResponse(template.file),
-                keys = template.keys.map { toKeyResponse(it) },
+                keys = template.keys.map { keyMapper.toDto(it) },
+                organizationId = this.organization.id,
                 organizationName = this.organization.name
             )
         }

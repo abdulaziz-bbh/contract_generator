@@ -27,6 +27,7 @@ data class TemplateResponse(
     val id: Long?,
     val templateName: String?,
     val file : AttachmentResponse?,
+    val organizationId: Long?,
     val organizationName: String?,
     val keys : List<KeyResponse>?
 )
