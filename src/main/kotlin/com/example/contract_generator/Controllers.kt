@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.*
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.multipart.MultipartFile
 import jakarta.validation.Valid
+import jakarta.websocket.server.PathParam
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -235,9 +236,18 @@ class UserController(
             return userService.updateOperator(request, id)
         }
 
-        @PutMapping("dismissal/{operator-id}/{organization-id}")
-        fun dismissal(@PathVariable("operator-id") operatorId: Long, @PathVariable("organization-id") organizationId: Long) {
+        @PostMapping("dismissal")
+        fun dismissal(
+            @PathParam("operatorId") operatorId: Long,
+            @PathParam("organizationId") organizationId: Long) {
             return userService.dismissal(operatorId, organizationId)
+        }
+        
+        @PostMapping("recruitment")
+        fun recruitment(
+            @PathParam("organizationId") organizationId: Long,
+            @PathParam("passportId") passportId: String) {
+            return userService.recruitment(organizationId, passportId)
         }
         @GetMapping("get-all/{organization-id}")
         fun getOrganizations(@PathVariable("organization-id") organizationId: Long): List<UserDto>? {

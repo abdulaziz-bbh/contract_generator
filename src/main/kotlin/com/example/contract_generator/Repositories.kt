@@ -107,10 +107,12 @@ interface UserRepository : BaseRepository<User>{
     """)
     fun findByPhoneNumber(phoneNumber: String, id: Long): User?
 
+    fun findByPassportId(passportId:String): User?
+
     @Query("""
         select u from users u where u.id != :id and u.passportId = :passportId
     """)
-    fun findByPassportId(passportId: String, id: Long): User?
+    fun existsUserIdAndPassportId(passportId: String, id: Long): User?
 
 }
 
