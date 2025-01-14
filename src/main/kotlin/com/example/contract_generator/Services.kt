@@ -215,7 +215,9 @@ class ContractServiceImpl(
             if (newValue != null) {
                 contractData.value = newValue
             }
-            if (!contractData.contract.operators.contains(user) || contractData.contract.isGenerated) {
+            contractData.contract.isGenerated = false
+            contractRepository.save(contractData.contract)
+            if (!contractData.contract.operators.contains(user)) {
                 throw PermissionDenied()
             }
         }
