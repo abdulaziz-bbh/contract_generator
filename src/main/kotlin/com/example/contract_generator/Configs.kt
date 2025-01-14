@@ -65,7 +65,8 @@ class SecurityConfig(
                auth -> auth
                .requestMatchers(
                    "api/v1/auth/**").permitAll()
-//               .requestMatchers("/api/v1/templates/**").hasAnyRole(Role.DIRECTOR.name)
+               .requestMatchers("/api/v1/templates/**").hasAnyRole(Role.DIRECTOR.name, Role.OPERATOR.name)
+               .requestMatchers("/api/v1/user/**").hasAnyRole(Role.DIRECTOR.name)
                .anyRequest().authenticated()
            }
            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter::class.java)

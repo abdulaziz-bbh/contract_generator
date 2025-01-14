@@ -1,6 +1,8 @@
 package com.example.contract_generator
 
 import jakarta.validation.constraints.NotNull
+import java.time.LocalDate
+import java.util.Date
 
 
 data class BaseMessage(val code: Int, val message: String?)
@@ -27,6 +29,7 @@ data class TemplateResponse(
     val id: Long?,
     val templateName: String?,
     val file : AttachmentResponse?,
+    val organizationId: Long?,
     val organizationName: String?,
     val keys : List<KeyResponse>?
 )
@@ -35,8 +38,13 @@ data class TemplateDto(
     val id: Long?,
     val templateName: String?,
     val organizationId: Long?,
-    val keys: List<String>?,
+    val keys: List<KeyDto>?,
     val attachmentId: Long?
+)
+
+data class KeyDto(
+    val id: Long?,
+    val key: String?
 )
 
 data class TemplateUpdateRequest(
@@ -151,4 +159,15 @@ data class OrganizationDto(
     val id: Long,
     val name: String,
     val address: String
+)
+
+data class ContractCountRequest(
+    val organizationId: Long,
+    val operatorId: Long?,
+    val date: LocalDate?
+)
+
+data class ContractCountResponse(
+    val organizationId: Long,
+    val countContract: Int
 )

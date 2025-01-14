@@ -32,7 +32,9 @@ interface UserService{
     fun createOperator(request: CreateOperatorRequest)
     fun updateOperator(request: UpdateOperatorRequest, id: Long)
     fun dismissal (operatorId: Long, organizationId: Long)
+    fun recruitment(operatorId: Long, passportId: String)
     fun getAllByOrganizationId(organizationId: Long):List<UserDto>?
+    fun getCountContracts(request: ContractCountRequest): ContractCountResponse
     fun existsUserData(passportId: String, phoneNumber: String)
     fun existsUserCurrentOrganization(passportId: String)
 }
@@ -623,7 +625,8 @@ class UserServiceImpl(
     private val userRepository: UserRepository,
     private val userMapper: UserMapper,
     private val organizationRepository: OrganizationRepository,
-    private val usersOrganizationRepository: UsersOrganizationRepository
+    private val usersOrganizationRepository: UsersOrganizationRepository,
+    private val contractRepository: ContractRepository
 ): UserService {
 
     @Transactional
@@ -646,7 +649,7 @@ class UserServiceImpl(
         }
         request.passportId.let {
             if (it != null) {
-                if (userRepository.findByPassportId(it, id) != null) {
+                if (userRepository.existsUserIdAndPassportId(it, id) != null) {
                     throw PassportIdAlreadyUsedException()
                 }
             }
@@ -674,9 +677,44 @@ class UserServiceImpl(
         usersOrganizationRepository.save(usersOrganization)
     }
 
+    override fun recruitment(operatorId: Long, passportId: String) {
+        existsUserCurrentOrganization(passportId)
+        val organization = organizationRepository.findByIdAndDeletedFalse(operatorId)
+            ?: throw OrganizationNotFoundException()
+        val operator = userRepository.findByPassportId(passportId)
+            ?: throw UserNotFoundException()
+
+        val userOrganization = UsersOrganization(
+            user = operator,
+            organization = organization,
+            isCurrentUser = true
+        )
+        usersOrganizationRepository.save(userOrganization)
+    }
+
 
     override fun getAllByOrganizationId(organizationId: Long): List<UserDto>? {
         return usersOrganizationRepository.findUsersByOrganizationId(organizationId)?.map { userMapper.toDto(it) }
+    }
+
+    override fun getCountContracts(request: ContractCountRequest): ContractCountResponse {
+        request.organizationId.let {
+            organizationRepository.findByIdAndDeletedFalse(request.organizationId)
+                ?: throw  OrganizationNotFoundException()
+        }
+        val count: Int = if (request.operatorId == null && request.date == null) {
+            contractRepository.getCountContracts(request.organizationId)
+        }else if (request.date != null && request.operatorId == null) {
+            contractRepository.getCountContracts(request.organizationId, request.date)
+        }else if(request.date == null && request.operatorId != null) {
+            contractRepository.getCountContracts(request.organizationId, request.operatorId)
+        }else{
+            contractRepository.getCountContracts(request.organizationId, request.operatorId!!, request.date!!)
+        }
+        return ContractCountResponse(
+            organizationId = request.organizationId,
+            countContract = count
+        )
     }
 
     override fun existsUserData(passportId: String, phoneNumber: String) {
@@ -689,7 +727,7 @@ class UserServiceImpl(
     override fun existsUserCurrentOrganization(passportId: String) {
         passportId.let {
             if (usersOrganizationRepository.existsByUserIdIsCurrent(it))
-                throw OperatorAlreadyCurrentException()
+                 throw OperatorAlreadyCurrentException()
         }
     }
 }
