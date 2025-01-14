@@ -39,7 +39,21 @@ class User(
     override fun isAccountNonLocked(): Boolean = true
     override fun isCredentialsNonExpired(): Boolean = true
     override fun isEnabled(): Boolean = true
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other == null || javaClass != other.javaClass) return false
+        other as User
 
+        return id == other.id &&
+                fullName == other.fullName &&
+                phoneNumber == other.phoneNumber &&
+                passportId == other.passportId &&
+                passWord == other.passWord &&
+                role == other.role
+    }
+    override fun hashCode(): Int {
+        return Objects.hash(id, fullName, phoneNumber, passportId, passWord, role)
+    }
 }
 
 @Entity

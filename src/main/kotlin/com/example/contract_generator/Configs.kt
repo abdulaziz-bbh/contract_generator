@@ -11,7 +11,9 @@ import org.springframework.data.jpa.repository.config.EnableJpaAuditing
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
+import org.springframework.scheduling.annotation.EnableAsync
 import org.springframework.scheduling.annotation.Scheduled
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
 import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.authentication.AuthenticationManager
 import org.springframework.security.authentication.AuthenticationProvider
@@ -32,6 +34,7 @@ import org.springframework.web.servlet.HandlerExceptionResolver
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
 import org.springframework.web.servlet.i18n.SessionLocaleResolver
 import java.util.*
+import java.util.concurrent.Executor
 
 @Configuration
 class WebMvcConfig : WebMvcConfigurer {
@@ -62,7 +65,7 @@ class SecurityConfig(
                auth -> auth
                .requestMatchers(
                    "api/v1/auth/**").permitAll()
-               .requestMatchers("/api/v1/templates/**").hasAnyRole(Role.DIRECTOR.name)
+//               .requestMatchers("/api/v1/templates/**").hasAnyRole(Role.DIRECTOR.name)
                .anyRequest().authenticated()
            }
            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter::class.java)
@@ -78,15 +81,19 @@ class SecurityConfig(
     }
 }
 
-@Component
-class JobRunning(private val jobService: JobService,
-    private val jobRepository: JobRepository,){
-    @Scheduled(fixedRate = 3_000)
-    fun schedulePendingJobs() {
-        val pendingJobs = jobRepository.findAllByStatus(JobStatus.PENDING)
-        pendingJobs.forEach { job ->
-            jobService.generateZip(job)
-        }
+@Configuration
+@EnableAsync
+class AsyncConfig {
+
+    @Bean(name = ["taskExecutor"])
+    fun taskExecutor(): Executor {
+        val executor = ThreadPoolTaskExecutor()
+        executor.corePoolSize = 5
+        executor.maxPoolSize = 10
+        executor.setQueueCapacity(25)
+        executor.setThreadNamePrefix("AsyncExecutor-")
+        executor.initialize()
+        return executor
     }
 }
 

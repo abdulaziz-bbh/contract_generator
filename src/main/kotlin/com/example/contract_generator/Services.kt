@@ -13,6 +13,7 @@ import org.springframework.data.domain.Sort
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
+import org.springframework.scheduling.annotation.Async
 import org.springframework.security.authentication.AuthenticationManager
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.userdetails.UserDetailsService
@@ -80,26 +81,32 @@ interface ContractService{
     fun delete(contractIds: List<Long>)
     fun getAll(isGenerated:Boolean?): List<ContractResponseDto>
     fun findById(contractId: Long):ContractResponseDto
+    fun generateZip(job: Job)
 }
 interface JobService{
     fun generateContract(contractIds: List<Long>,isDoc: Boolean): JobDto
-    fun getStatus(jobIds: List<Long>): Map<JobDto,String>
-    fun generateZip(job: Job)
+    fun getStatus(jobIds: List<Long>): List<JobDto>
 }
 @Service
-class JobServiceImpl(private val jobRepository: JobRepository,
+class JobServiceImpl(
+    private val jobRepository: JobRepository,
     private val contractRepository: ContractRepository,
     private val jobMapper: JobMapper,
-    private val contractDataRepository: ContractDataRepository,
-    private val attachmentRepository: AttachmentRepository,
-    private val attachmentMapper: AttachmentMapper
-    ): JobService{
+    private val contractService:ContractService
+): JobService {
     @Transactional
     override fun generateContract(contractIds: List<Long>, isDoc: Boolean): JobDto {
         if (contractIds.distinct().size != contractIds.size) {
             throw DuplicateContract()
         }
-        contractRepository.existsAllByOperatorsAndDeletedFalse(contractIds,getCurrentOrganization(usersOrganizationRepository),contractIds.size.toLong())
+        if (!contractRepository.existsAllByOperatorsAndDeletedFalse(
+                contractIds,
+                getCurrentUserId()!!,
+                contractIds.size.toLong()
+            )
+        ) {
+            throw PermissionDenied()
+        }
         val contracts = contractRepository.findAllByIdInAndDeletedFalse(contractIds)
         if (contracts.size != contractIds.size) {
             throw ContractNotFound()
@@ -107,25 +114,154 @@ class JobServiceImpl(private val jobRepository: JobRepository,
 
         val job = Job(isDoc = isDoc)
         job.contracts.addAll(contracts)
-        return jobMapper.toDto(jobRepository.save(job))
+
+        contractService.generateZip(jobRepository.save(job))
+        return jobMapper.toDto(job)
     }
 
-    override fun getStatus(jobIds: List<Long>): Map<JobDto, String> {
+    override fun getStatus(jobIds: List<Long>): List<JobDto> {
         val jobs = jobRepository.findAllByIdInAndCreatedByAndDeletedFalse(jobIds, getCurrentUserId()?.id!!)
-//        val jobs = jobRepository.findAllById(jobIds)
         if (jobs.size != jobIds.size) {
             throw JobNotFound()
         }
-        return jobs.associate { job ->
-            val jobDto = jobMapper.toDto(job)
-            val attachmentName = if (job.status == JobStatus.COMPLETED) {
-                job.attachment?.hashId?: "No Attachment"
-            } else {
-                ""
-            }
-            jobDto to attachmentName
+        return jobs.map {
+            job-> jobMapper.toDto(job,job.attachment?.hashId)
         }
     }
+}
+
+@Service
+class ContractServiceImpl(
+    private val templateRepository: TemplateRepository,
+    private val contractRepository: ContractRepository,
+    private val contractDataRepository: ContractDataRepository,
+    private val keyRepository: KeyRepository,
+    private val contractMapper: ContractMapper,
+    private val usersOrganizationRepository: UsersOrganizationRepository,
+    private val attachmentMapper: AttachmentMapper,
+    private val jobRepository: JobRepository,
+    private val attachmentRepository: AttachmentRepository
+
+): ContractService{
+    @Transactional
+    override fun createContract(templateId: Long, list: List<ContractRequestDto>): List<ContractResponseDto> {
+        val template: Template = templateRepository.findByIdAndDeletedFalse(templateId)
+            ?: throw TemplateNotFoundException()
+        if(template.organization != getCurrentOrganization(usersOrganizationRepository))(
+                throw TemplateNotFoundException()
+        )
+        val currentUser = getCurrentUserId()?:throw UserNotFoundException()
+
+        if (list.size != list.distinctBy { it.contractData }.size) {
+            throw DuplicateContract()
+        }
+        val requiredKeyIds = template.keys.map { it.id }.toSet()
+
+        val responseDtos = mutableListOf<ContractResponseDto>()
+
+        list.forEach { contractRequestDto ->
+            val keyIds = contractRequestDto.contractData.map { it.keyId }
+
+            if (keyIds.size != keyIds.distinct().size) {
+                throw DuplicateKey()
+            }
+
+            if (!requiredKeyIds.all { it in keyIds }) {
+                throw MissingTemplateKeys()
+            }
+            val keys = keyRepository.findAllByIdInAndDeletedFalse(keyIds)
+
+            val unresolvedKeyIds = keyIds - keys.map { it.id }
+            if (unresolvedKeyIds.isNotEmpty()) {
+                throw KeyNotFoundException()
+            }
+
+            val contract = Contract(template = template).apply {
+                operators.add(currentUser)
+            }
+            contractRepository.save(contract)
+
+            val contractDataList = contractRequestDto.contractData.map { contractData ->
+                val key = keys.find { it.id == contractData.keyId }
+                    ?: throw KeyNotFoundException()
+                ContractData(
+                    key = key,
+                    value = contractData.value,
+                    contract = contract
+                )
+            }
+            contractDataRepository.saveAll(contractDataList)
+            responseDtos.add(contractMapper.toDto(contract, contractDataList))
+        }
+
+        return responseDtos
+    }
+
+    @Transactional
+    override fun updateContract(list: List<CreateContractDataDto>) {
+        val keyIds = list.map { it.keyId }
+        if (keyIds.size != keyIds.distinct().size) {
+            throw DuplicateKey()
+        }
+        val existingContractData = contractDataRepository.findAllByIdInAndDeletedFalse(keyIds)
+        if (existingContractData.size != list.size) {
+            throw ContractDataNotFound()
+        }
+        val user = getCurrentUserId()
+        existingContractData.forEach { contractData ->
+            val newValue = list.get(keyIds.indexOf(contractData.id)).value
+            if (newValue != null) {
+                contractData.value = newValue
+            }
+            if (!contractData.contract.operators.contains(user) || contractData.contract.isGenerated) {
+                throw PermissionDenied()
+            }
+        }
+        contractDataRepository.saveAll(existingContractData)
+    }
+
+
+    @Transactional
+    override fun delete(contractIds: List<Long>) {
+        if (contractIds.distinct().size != contractIds.size) {
+            throw DuplicateContract()
+        }
+        if (!contractRepository.existsAllByOperatorsAndDeletedFalse(contractIds, getCurrentUserId()!!,contractIds.size.toLong())){
+            throw PermissionDenied()
+        }
+        val trashedContracts = contractRepository.trashList(contractIds)
+        if (trashedContracts.any { it == null }) {
+            throw ContractNotFound()
+        }
+        trashedContracts.filterNotNull().forEach { contract ->
+            val contractDataIds = contractDataRepository.findAllByContract(contract).mapNotNull { it.id }
+            contractDataRepository.trashList(contractDataIds)
+        }
+    }
+
+    override fun getAll(isGenerated: Boolean?): List<ContractResponseDto> {
+        val user= getCurrentUserId()!!
+        val contracts = if (isGenerated != null) {
+            contractRepository.findByOperatorAndIsGeneratedAndDeletedFalse(user,isGenerated)
+        } else {
+            contractRepository.getAllByOperatorAndDeletedFalse(user)
+        }
+        return contracts.map { contract ->
+            contractMapper.toDto(contract, contractDataRepository.findAllByContract(contract))
+        }
+    }
+
+
+    override fun findById(contractId: Long): ContractResponseDto {
+        val contract = contractRepository.findByIdAndDeletedFalse(contractId)
+            ?: throw ContractNotFound()
+
+        if (!contract.operators.contains(getCurrentUserId()!!)) {
+            throw PermissionDenied()
+        }
+        return contractMapper.toDto(contract, contractDataRepository.findAllByContract(contract))
+    }
+    @Async
     override fun generateZip(job: Job) {
         val files: MutableList<File> = mutableListOf()
         try {
@@ -168,10 +304,11 @@ class JobServiceImpl(private val jobRepository: JobRepository,
                     outputPdfPath.mkdirs()
                 }
                 val pdfFiles = files.map {
-                    file -> convertDocxToPdf(file, outputPdfPath.absolutePath)
+                        file -> convertDocxToPdf(file, outputPdfPath.absolutePath)
                     File("${outputPdfPath.absolutePath}/${file.nameWithoutExtension}.pdf")
                 }
                 zipFile = createZipFile(pdfFiles)
+                pdfFiles.forEach{pdfFile -> pdfFile.delete()}
             }else {
                 zipFile = createZipFile(files)
             }
@@ -265,7 +402,6 @@ class JobServiceImpl(private val jobRepository: JobRepository,
         return zipFile
     }
 
-
     private fun replaceTextInRuns(runs: List<XWPFRun>, keys: Map<String, String>) {
         runs.forEach { run ->
             keys.forEach { (key, value) ->
@@ -290,146 +426,6 @@ class JobServiceImpl(private val jobRepository: JobRepository,
             }
         }
     }
-
-}
-
-@Service
-class ContractServiceImpl(
-    private val templateRepository: TemplateRepository,
-    private val contractRepository: ContractRepository,
-    private val contractDataRepository: ContractDataRepository,
-    private val keyRepository: KeyRepository,
-    private val contractMapper: ContractMapper,
-    private val usersOrganizationRepository: UsersOrganizationRepository
-
-): ContractService{
-    @Transactional
-    override fun createContract(templateId: Long, list: List<ContractRequestDto>): List<ContractResponseDto> {
-        val template: Template = templateRepository.findByIdAndDeletedFalse(templateId)
-            ?: throw TemplateNotFoundException()
-        if(template.organization != getCurrentOrganization(usersOrganizationRepository))(
-                throw TemplateNotFoundException()
-        )
-        val currentUser = getCurrentUserId()?:throw UserNotFoundException()
-
-        if (list.size != list.distinctBy { it.contractData }.size) {
-            throw DuplicateContract()
-        }
-        val requiredKeyIds = template.keys.map { it.id }.toSet()
-
-        val responseDtos = mutableListOf<ContractResponseDto>()
-
-        list.forEach { contractRequestDto ->
-            val keyIds = contractRequestDto.contractData.map { it.keyId }
-
-            if (keyIds.size != keyIds.distinct().size) {
-                throw DuplicateKey()
-            }
-
-            if (!requiredKeyIds.all { it in keyIds }) {
-                throw MissingTemplateKeys()
-            }
-            val keys = keyRepository.findAllByIdInAndDeletedFalse(keyIds)
-
-            val unresolvedKeyIds = keyIds - keys.map { it.id }
-            if (unresolvedKeyIds.isNotEmpty()) {
-                throw KeyNotFoundException()
-            }
-
-            val contract = Contract(template = template).apply {
-                operators.add(currentUser)
-            }
-            contractRepository.save(contract)
-
-            val contractDataList = contractRequestDto.contractData.map { contractData ->
-                val key = keys.find { it.id == contractData.keyId }
-                    ?: throw KeyNotFoundException()
-                ContractData(
-                    key = key,
-                    value = contractData.value,
-                    contract = contract
-                )
-            }
-            contractDataRepository.saveAll(contractDataList)
-            responseDtos.add(contractMapper.toDto(contract, contractDataList))
-        }
-
-        return responseDtos
-    }
-
-
-
-
-    @Transactional
-    override fun updateContract(list: List<CreateContractDataDto>) {
-        val keyIds = list.map { it.keyId }
-        if (keyIds.size != keyIds.distinct().size) {
-            throw DuplicateKey()
-        }
-        val existingContractData = contractDataRepository.findAllByIdInAndDeletedFalse(keyIds)
-        val unresolvedKeyIds = keyIds - existingContractData.mapNotNull { it.key.id }
-        if (unresolvedKeyIds.isNotEmpty()) {
-            throw ContractDataNotFound()
-        }
-        val user = getCurrentUserId()
-        existingContractData.forEach { contractData ->
-            val newValue = list.find { it.keyId == contractData.key.id }?.value
-            if (newValue != null) {
-                contractData.value = newValue
-            }
-            if (!contractData.contract.operators.contains(user)) {
-                throw PermissionDenied()
-            }
-        }
-        contractDataRepository.saveAll(existingContractData)
-    }
-
-
-    @Transactional
-    override fun delete(contractIds: List<Long>) {
-        if (contractIds.distinct().size != contractIds.size) {
-            throw DuplicateContract()
-        }
-        if (!contractRepository.existsAllByOperatorsAndDeletedFalse(contractIds,getCurrentOrganization(usersOrganizationRepository),contractIds.size.toLong())){
-            throw PermissionDenied()
-        }
-        val trashedContracts = contractRepository.trashList(contractIds)
-        if (trashedContracts.any { it == null }) {
-            throw ContractNotFound()
-        }
-        trashedContracts.filterNotNull().forEach { contract ->
-            val contractDataIds = contractDataRepository.findAllByContract(contract).mapNotNull { it.id }
-            contractDataRepository.trashList(contractDataIds)
-        }
-    }
-
-
-
-    override fun getAll(isGenerated: Boolean?): List<ContractResponseDto> {
-        val organization=getCurrentOrganization(usersOrganizationRepository)
-        val contracts = if (isGenerated != null) {
-            contractRepository.findByOperatorAndIsGeneratedAndDeletedFalse(organization,isGenerated)
-        } else {
-            contractRepository.getAllByOperatorAndDeletedFalse(organization)
-        }
-        return contracts.map { contract ->
-            contractMapper.toDto(contract, contractDataRepository.findAllByContract(contract))
-        }
-    }
-
-
-    override fun findById(contractId: Long): ContractResponseDto {
-        val contract = contractRepository.findByIdAndDeletedFalse(contractId)
-            ?: throw ContractNotFound()
-
-        if (!contract.operators.contains(getCurrentOrganization(usersOrganizationRepository))) {
-            throw PermissionDenied()
-        }
-        return contractMapper.toDto(contract, contractDataRepository.findAllByContract(contract))
-    }
-
-
-
 }
 
 @Service
@@ -792,10 +788,9 @@ class AuthServiceImpl(
 class AttachmentServiceImpl(
     private  val repository: AttachmentRepository,
     private val attachmentMapper: AttachmentMapper,
+    private val jobRepository: JobRepository
     ) : AttachmentService {
-    @Value("\${file.path}")
-    lateinit var filePath: String
-  
+
     override fun upload(multipartFile: MultipartFile , subFolder : String?): AttachmentInfo {
         val entity = attachmentMapper.toEntity(multipartFile, subFolder)
         val file = File(entity.path).apply {
@@ -813,10 +808,12 @@ class AttachmentServiceImpl(
     @Throws(IOException::class)
     override fun download(hashId: String): ResponseEntity<*> {
         val fileEntity = repository.findByHashIdAndDeletedFalse(hashId)?:throw AttachmentNotFound()
-        if (getCurrentUserId()?.id != fileEntity.createdBy) {
-            throw PermissionDenied()
+        val operator = getCurrentUserId()
+        jobRepository.findByAttachmentAndDeletedFalse(fileEntity)?.let {
+            if (operator?.id != it.createdBy) {
+                throw PermissionDenied()
+            }
         }
-
         return fileEntity.run{
             val inputStream = FileInputStream(path)
             val resource = InputStreamResource(inputStream)

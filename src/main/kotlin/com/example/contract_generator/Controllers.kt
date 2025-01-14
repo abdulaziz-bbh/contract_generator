@@ -72,7 +72,7 @@ class JobController(private val jobService: JobService) {
         return jobService.generateContract(contractIds, isDoc)
     }
     @GetMapping("/status")
-    fun generateContract(@RequestParam jobIds: List<Long>): Map<JobDto,String> {
+    fun generateContract(@RequestParam jobIds: List<Long>): List<JobDto> {
         return jobService.getStatus(jobIds)
     }
 }

@@ -144,6 +144,7 @@ data class JobDto(
     val id: Long,
     val isDoc: Boolean,
     val status: JobStatus,
+    val hashId: String?,
 )
 
 data class OrganizationDto(

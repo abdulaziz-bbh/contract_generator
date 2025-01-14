@@ -183,7 +183,6 @@ interface UsersOrganizationRepository : BaseRepository<UsersOrganization>{
 
 interface AttachmentRepository : BaseRepository<Attachment> {
     fun findByHashIdAndDeletedFalse(hashId: String): Attachment?
-    fun findByName(name: String): Attachment?
 }
 
 interface ContractDataRepository : BaseRepository<ContractData>{
@@ -192,8 +191,6 @@ interface ContractDataRepository : BaseRepository<ContractData>{
 }
 @Repository
 interface JobRepository : BaseRepository<Job>{
-    fun findAllByIdInAndDeletedFalse(ids: Collection<Long>): List<Job>
-    @Query("SELECT j FROM Job j LEFT JOIN FETCH j.contracts WHERE j.status = :status")
-    fun findAllByStatus(@Param("status") status: JobStatus): List<Job>
     fun findAllByIdInAndCreatedByAndDeletedFalse(ids: Collection<Long>,createdBy:Long): List<Job>
+    fun findByAttachmentAndDeletedFalse(attachment: Attachment): Job?
 }

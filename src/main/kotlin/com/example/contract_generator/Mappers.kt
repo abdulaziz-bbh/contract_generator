@@ -232,11 +232,12 @@ class ContractMapper(private val userMapper: UserMapper,
 }
 @Component
 class JobMapper {
-    fun toDto(job: Job): JobDto {
+    fun toDto(job: Job,hashId:String? = null): JobDto {
         return JobDto(
             id = job.id!!,
             isDoc = job.isDoc,
             status = job.status,
+            hashId = hashId
         )
     }
 }
