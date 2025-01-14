@@ -213,12 +213,6 @@ class AuthController(
     fun signIn(@RequestBody @Valid request: LoginRequest): AuthenticationDto {
         return authService.login(request)
     }
-
-
-//        @PostMapping("/refresh-token")
-//        fun refreshToken(request: HttpServletRequest, response: HttpServletResponse) {
-//            return authService.refreshToken(request, response)
-//        }
 }
 
 @RestController
@@ -227,32 +221,36 @@ class UserController(
     private val userService: UserService
 ) {
 
-        @PostMapping
-        fun create(@RequestBody @Valid request: CreateOperatorRequest) {
-            return userService.createOperator(request)
-        }
-        @PutMapping("/{id}")
-        fun update(@RequestBody @Valid request: UpdateOperatorRequest, @PathVariable("id") id: Long) {
-            return userService.updateOperator(request, id)
-        }
+    @PostMapping
+    fun create(@RequestBody @Valid request: CreateOperatorRequest) {
+        return userService.createOperator(request)
+    }
+    @PutMapping("/{id}")
+    fun update(@RequestBody @Valid request: UpdateOperatorRequest, @PathVariable("id") id: Long) {
+        return userService.updateOperator(request, id)
+    }
 
-        @PostMapping("dismissal")
-        fun dismissal(
-            @PathParam("operatorId") operatorId: Long,
-            @PathParam("organizationId") organizationId: Long) {
-            return userService.dismissal(operatorId, organizationId)
-        }
-        
-        @PostMapping("recruitment")
-        fun recruitment(
-            @PathParam("organizationId") organizationId: Long,
-            @PathParam("passportId") passportId: String) {
-            return userService.recruitment(organizationId, passportId)
-        }
-        @GetMapping("get-all/{organization-id}")
-        fun getOrganizations(@PathVariable("organization-id") organizationId: Long): List<UserDto>? {
-            return userService.getAllByOrganizationId(organizationId)
-        }
+    @PostMapping("dismissal")
+    fun dismissal(
+        @PathParam("operatorId") operatorId: Long,
+        @PathParam("organizationId") organizationId: Long) {
+        return userService.dismissal(operatorId, organizationId)
+    }
+
+    @PostMapping("recruitment")
+    fun recruitment(
+        @PathParam("organizationId") organizationId: Long,
+        @PathParam("passportId") passportId: String) {
+        return userService.recruitment(organizationId, passportId)
+    }
+    @GetMapping("get-all/{organization-id}")
+    fun getOrganizations(@PathVariable("organization-id") organizationId: Long): List<UserDto>? {
+        return userService.getAllByOrganizationId(organizationId)
+    }
+    @GetMapping("get-count-contracts")
+    fun getCountContracts(@RequestBody request: ContractCountRequest): ContractCountResponse {
+        return userService.getCountContracts(request)
+    }
 }
 
 @RestController

@@ -14,6 +14,8 @@ import org.springframework.data.repository.NoRepositoryBean
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
+import java.time.LocalDate
+import java.util.Date
 
 
 @NoRepositoryBean
@@ -80,6 +82,33 @@ interface ContractRepository : BaseRepository<Contract> {
     fun findByFile_Name(fileName: String): Contract?
     fun findByIsGeneratedAndDeletedFalse(isGenerated: Boolean): List<Contract>
     fun findAllByIdInAndDeletedFalse(ids: Collection<Long>): List<Contract>
+
+    @Query("""
+        select count(*) from Contract c where c.template.organization.id = :organizationId 
+        and c.createdBy = :operatorId 
+        and extract(date from c.createdAt )= :date 
+    """)
+    fun getCountContracts(organizationId: Long, operatorId: Long, date: LocalDate): Int
+
+    @Query("""
+        select count(*) from Contract c where c.template.organization.id = :organizationId
+        and extract(date from c.createdAt )= :date 
+    """)
+    fun getCountContracts(organizationId: Long, date: LocalDate): Int
+
+    @Query("""
+        select count(*) from Contract c where c.template.organization.id = :organizationId 
+        and c.createdBy = :operatorId 
+    """)
+    fun getCountContracts(organizationId: Long, operatorId: Long): Int
+
+
+    @Query("""
+        select count(*) from Contract c where c.template.organization.id = :organizationId 
+    """)
+    fun getCountContracts(organizationId: Long): Int
+
+
 }
 
 @Repository
