@@ -31,6 +31,7 @@ interface UserService{
     fun createOperator(request: CreateOperatorRequest)
     fun updateOperator(request: UpdateOperatorRequest, id: Long)
     fun dismissal (operatorId: Long, organizationId: Long)
+    fun recruitment(operatorId: Long, passportId: String)
     fun getAllByOrganizationId(organizationId: Long):List<UserDto>?
     fun existsUserData(passportId: String, phoneNumber: String)
     fun existsUserCurrentOrganization(passportId: String)
@@ -628,7 +629,7 @@ class UserServiceImpl(
         }
         request.passportId.let {
             if (it != null) {
-                if (userRepository.findByPassportId(it, id) != null) {
+                if (userRepository.existsUserIdAndPassportId(it, id) != null) {
                     throw PassportIdAlreadyUsedException()
                 }
             }
@@ -656,6 +657,21 @@ class UserServiceImpl(
         usersOrganizationRepository.save(usersOrganization)
     }
 
+    override fun recruitment(operatorId: Long, passportId: String) {
+        existsUserCurrentOrganization(passportId)
+        val organization = organizationRepository.findByIdAndDeletedFalse(operatorId)
+            ?: throw OrganizationNotFoundException()
+        val operator = userRepository.findByPassportId(passportId)
+            ?: throw UserNotFoundException()
+
+        val userOrganization = UsersOrganization(
+            user = operator,
+            organization = organization,
+            isCurrentUser = true
+        )
+        usersOrganizationRepository.save(userOrganization)
+    }
+
 
     override fun getAllByOrganizationId(organizationId: Long): List<UserDto>? {
         return usersOrganizationRepository.findUsersByOrganizationId(organizationId)?.map { userMapper.toDto(it) }
@@ -671,7 +687,7 @@ class UserServiceImpl(
     override fun existsUserCurrentOrganization(passportId: String) {
         passportId.let {
             if (usersOrganizationRepository.existsByUserIdIsCurrent(it))
-                throw OperatorAlreadyCurrentException()
+                 throw OperatorAlreadyCurrentException()
         }
     }
 }
