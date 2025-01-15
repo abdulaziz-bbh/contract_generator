@@ -1,6 +1,8 @@
 package com.example.contract_generator
 
+import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
+import jakarta.validation.constraints.Positive
 import java.time.LocalDate
 import java.util.Date
 
@@ -136,13 +138,24 @@ data class ContractResponseDto(
 
 data class ContractDataDto(
     val id: Long,
-    val key: KeyResponse,
+    val key: String,
     val value: String
 )
 
-data class ContractUpdateDto(
-    val fileName: String,
-    val keys: Map<String,String>
+data class ContractDataUpdateDto(
+    @field:NotNull @field:Positive val contractDataId: Long,
+    @field:NotNull @field: NotBlank val value: String
+)
+data class ContractIdsDto(
+    @field:NotNull @field: Positive val contractId: Long
+)
+data class JobIdsDto(
+    @field:NotNull @field: Positive val jobId: Long
+)
+
+data class GenerateContractDto(
+    @field:NotNull val extension:JobType,
+    @field:NotNull @field:NotBlank val list:List<ContractIdsDto>
 )
 data class  GenerateContractRequest(
     val isDocsOrPdf: Boolean,
@@ -150,7 +163,7 @@ data class  GenerateContractRequest(
 )
 data class JobDto(
     val id: Long,
-    val isDoc: Boolean,
+    val extension: JobType,
     val status: JobStatus,
     val hashId: String?,
 )

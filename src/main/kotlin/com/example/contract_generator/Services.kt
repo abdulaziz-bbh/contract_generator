@@ -79,15 +79,15 @@ interface AttachmentService {
 
 interface ContractService{
     fun createContract(templateId: Long, list: List<ContractRequestDto>): List<ContractResponseDto>
-    fun updateContract(list: List<CreateContractDataDto>)
-    fun delete(contractIds: List<Long>)
+    fun updateContract(list: List<ContractDataUpdateDto>)
+    fun delete(contractIds: List<ContractIdsDto>)
     fun getAll(isGenerated:Boolean?): List<ContractResponseDto>
     fun findById(contractId: Long):ContractResponseDto
     fun generateZip(job: Job)
 }
 interface JobService{
-    fun generateContract(contractIds: List<Long>,isDoc: Boolean): JobDto
-    fun getStatus(jobIds: List<Long>): List<JobDto>
+    fun generateContract(dto: GenerateContractDto): JobDto
+    fun getStatus(jobIds: List<JobIdsDto>): List<JobDto>
 }
 @Service
 class JobServiceImpl(
@@ -97,32 +97,33 @@ class JobServiceImpl(
     private val contractService:ContractService
 ): JobService {
     @Transactional
-    override fun generateContract(contractIds: List<Long>, isDoc: Boolean): JobDto {
-        if (contractIds.distinct().size != contractIds.size) {
+    override fun generateContract(dto: GenerateContractDto): JobDto {
+        val ids = dto.list.map { it.contractId }
+        if (ids.distinct().size != ids.size) {
             throw DuplicateContract()
         }
         if (!contractRepository.existsAllByOperatorsAndDeletedFalse(
-                contractIds,
+                ids,
                 getCurrentUserId()!!,
-                contractIds.size.toLong()
+                ids.size.toLong()
             )
         ) {
             throw PermissionDenied()
         }
-        val contracts = contractRepository.findAllByIdInAndDeletedFalse(contractIds)
-        if (contracts.size != contractIds.size) {
+        val contracts = contractRepository.findAllByIdInAndDeletedFalse(ids)
+        if (contracts.size != ids.size) {
             throw ContractNotFound()
         }
 
-        val job = Job(isDoc = isDoc)
+        val job = Job(extension = dto.extension)
         job.contracts.addAll(contracts)
 
         contractService.generateZip(jobRepository.save(job))
         return jobMapper.toDto(job)
     }
 
-    override fun getStatus(jobIds: List<Long>): List<JobDto> {
-        val jobs = jobRepository.findAllByIdInAndCreatedByAndDeletedFalse(jobIds, getCurrentUserId()?.id!!)
+    override fun getStatus(jobIds: List<JobIdsDto>): List<JobDto> {
+        val jobs = jobRepository.findAllByIdInAndCreatedByAndDeletedFalse(jobIds.map { it.jobId }, getCurrentUserId()?.id!!)
         if (jobs.size != jobIds.size) {
             throw JobNotFound()
         }
@@ -200,8 +201,8 @@ class ContractServiceImpl(
     }
 
     @Transactional
-    override fun updateContract(list: List<CreateContractDataDto>) {
-        val keyIds = list.map { it.keyId }
+    override fun updateContract(list: List<ContractDataUpdateDto>) {
+        val keyIds = list.map { it.contractDataId}
         if (keyIds.size != keyIds.distinct().size) {
             throw DuplicateKey()
         }
@@ -224,14 +225,15 @@ class ContractServiceImpl(
 
 
     @Transactional
-    override fun delete(contractIds: List<Long>) {
+    override fun delete(contractIds: List<ContractIdsDto>) {
+        val ids = contractIds.map { it.contractId }
         if (contractIds.distinct().size != contractIds.size) {
             throw DuplicateContract()
         }
-        if (!contractRepository.existsAllByOperatorsAndDeletedFalse(contractIds, getCurrentUserId()!!,contractIds.size.toLong())){
+        if (!contractRepository.existsAllByOperatorsAndDeletedFalse(ids, getCurrentUserId()!!,contractIds.size.toLong())){
             throw PermissionDenied()
         }
-        val trashedContracts = contractRepository.trashList(contractIds)
+        val trashedContracts = contractRepository.trashList(ids)
         if (trashedContracts.any { it == null }) {
             throw ContractNotFound()
         }
@@ -300,7 +302,7 @@ class ContractServiceImpl(
                 files.add(contractFile)
             }
             var zipFile:File? = null
-            if (!job.isDoc){
+            if (job.extension == JobType.PDF){
                 val outputPdfPath = File("file/pdf")
                 if (!outputPdfPath.exists()) {
                     outputPdfPath.mkdirs()
@@ -847,7 +849,7 @@ class AttachmentServiceImpl(
     override fun download(hashId: String): ResponseEntity<*> {
         val fileEntity = repository.findByHashIdAndDeletedFalse(hashId)?:throw AttachmentNotFound()
         val operator = getCurrentUserId()
-        jobRepository.findByAttachmentAndDeletedFalse(fileEntity)?.let {
+        jobRepository.findAllByAttachmentAndDeletedFalse(fileEntity)?.let {
             if (operator?.id != it.createdBy) {
                 throw PermissionDenied()
             }

@@ -119,7 +119,7 @@ class ContractData(
 
 @Entity
 class Job(
-    @Column(nullable = false)val isDoc:Boolean,
+    @Enumerated(EnumType.STRING) val extension: JobType,
     @OneToOne var attachment: Attachment? = null,
     @ManyToMany val contracts: MutableList<Contract> = mutableListOf(),
     @Enumerated(value = EnumType.STRING) var status: JobStatus=JobStatus.PENDING

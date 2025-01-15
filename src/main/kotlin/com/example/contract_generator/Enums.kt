@@ -5,7 +5,9 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority
 enum class JobStatus {
     PENDING, COMPLETED,FAILED
 }
-
+enum class JobType {
+    DOCX,PDF
+}
 enum class ErrorCode(val code: Int) {
     USER_ALREADY_EXISTS(10),
     USER_NOT_FOUND(11),
