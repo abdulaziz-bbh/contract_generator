@@ -48,7 +48,7 @@ class TemplateMapper(
                 id = template.id,
                 templateName = template.templateName,
                 file = toAttachmentResponse(template.file),
-                keys = template.keys.map { keyMapper.toDto(it) },
+                keys = template.keys.map { KeyResponse(it.id, it.key.removeSurrounding("$"))},
                 organizationId = this.organization.id,
                 organizationName = this.organization.name
             )
@@ -91,15 +91,6 @@ class TemplateMapper(
             attachmentId = template.file.id
         )
     }
-
-//    fun updateEntity(template: Template, updateRequest: TemplateUpdateRequest): Template {
-//        return updateRequest.run {
-//            template.apply {
-//                updateRequest.templateName.let { this.templateName = it }
-//                updateRequest.keys.let { this.keys = it }
-//            }
-//        }
-//    }
 }
 @Component
 class AttachmentMapper {
