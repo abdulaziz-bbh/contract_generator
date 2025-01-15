@@ -2,9 +2,9 @@ package com.example.contract_generator
 
 import jakarta.persistence.EntityManager
 import jakarta.transaction.Transactional
+import org.apache.poi.ss.formula.functions.T
 import org.apache.poi.xwpf.usermodel.XWPFDocument
 import org.apache.poi.xwpf.usermodel.XWPFRun
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.core.io.InputStreamResource
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageRequest
@@ -84,10 +84,12 @@ interface ContractService{
     fun getAll(isGenerated:Boolean?): List<ContractResponseDto>
     fun findById(contractId: Long):ContractResponseDto
     fun generateZip(job: Job)
+    fun checkDistinct(ids: List<Long>,exception: GenericException): List<Long>
 }
 interface JobService{
     fun generateContract(dto: GenerateContractDto): JobDto
     fun getStatus(jobIds: List<JobIdsDto>): List<JobDto>
+    fun getAll():List<JobDto>
 }
 @Service
 class JobServiceImpl(
@@ -98,10 +100,7 @@ class JobServiceImpl(
 ): JobService {
     @Transactional
     override fun generateContract(dto: GenerateContractDto): JobDto {
-        val ids = dto.list.map { it.contractId }
-        if (ids.distinct().size != ids.size) {
-            throw DuplicateContract()
-        }
+        val ids = contractService.checkDistinct(dto.list.map { it.contractId },DuplicateContract())
         if (!contractRepository.existsAllByOperatorsAndDeletedFalse(
                 ids,
                 getCurrentUserId()!!,
@@ -130,6 +129,10 @@ class JobServiceImpl(
         return jobs.map {
             job-> jobMapper.toDto(job,job.attachment?.hashId)
         }
+    }
+
+    override fun getAll(): List<JobDto> {
+        return jobRepository.findAllByCreatedByAndDeletedFalse(getCurrentUserId()?.id!!).map { jobMapper.toDto(it,it.attachment?.hashId) }
     }
 }
 
@@ -163,18 +166,14 @@ class ContractServiceImpl(
         val responseDtos = mutableListOf<ContractResponseDto>()
 
         list.forEach { contractRequestDto ->
-            val keyIds = contractRequestDto.contractData.map { it.keyId }
-
-            if (keyIds.size != keyIds.distinct().size) {
-                throw DuplicateKey()
-            }
+            val keyIds = checkDistinct(contractRequestDto.contractData.map { it.keyId },DuplicateKey())
 
             if (!requiredKeyIds.all { it in keyIds }) {
                 throw MissingTemplateKeys()
             }
             val keys = keyRepository.findAllByIdInAndDeletedFalse(keyIds)
 
-            val unresolvedKeyIds = keyIds - keys.map { it.id }
+            val unresolvedKeyIds = keyIds - keys.map { it.id }.toSet()
             if (unresolvedKeyIds.isNotEmpty()) {
                 throw KeyNotFoundException()
             }
@@ -202,10 +201,7 @@ class ContractServiceImpl(
 
     @Transactional
     override fun updateContract(list: List<ContractDataUpdateDto>) {
-        val keyIds = list.map { it.contractDataId}
-        if (keyIds.size != keyIds.distinct().size) {
-            throw DuplicateKey()
-        }
+        val keyIds = checkDistinct(list.map { it.contractDataId},DuplicateKey())
         val existingContractData = contractDataRepository.findAllByIdInAndDeletedFalse(keyIds)
         if (existingContractData.size != list.size) {
             throw ContractDataNotFound()
@@ -213,9 +209,7 @@ class ContractServiceImpl(
         val user = getCurrentUserId()
         existingContractData.forEach { contractData ->
             val newValue = list.get(keyIds.indexOf(contractData.id)).value
-            if (newValue != null) {
-                contractData.value = newValue
-            }
+            contractData.value = newValue
             contractData.contract.isGenerated = false
             contractRepository.save(contractData.contract)
             if (!contractData.contract.operators.contains(user)) {
@@ -228,10 +222,7 @@ class ContractServiceImpl(
 
     @Transactional
     override fun delete(contractIds: List<ContractIdsDto>) {
-        val ids = contractIds.map { it.contractId }
-        if (contractIds.distinct().size != contractIds.size) {
-            throw DuplicateContract()
-        }
+        val ids = checkDistinct(contractIds.map { it.contractId },DuplicateContract())
         if (!contractRepository.existsAllByOperatorsAndDeletedFalse(ids, getCurrentUserId()!!,contractIds.size.toLong())){
             throw PermissionDenied()
         }
@@ -276,45 +267,15 @@ class ContractServiceImpl(
                     contract.file?.let { File(it.path) }
                         ?: throw AttachmentNotFound()
                 } else {
-                    val template = contract.template
-
-                    val (_, uuid, path) = attachmentMapper.createDirectoryPath(subFolder = "contract")
-                    val tempFile = File("$path/$uuid.docx")
-                    tempFile.createNewFile()
-
-                    Files.copy(Paths.get(template.file.path), tempFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
-                    val keys = contractDataRepository.findAllByContract(contract)
-                        .associate { it.key.key to it.value }
-                    val replacedFile = replaceKeysWithStyles(tempFile, keys)
-
-                    val newAttachment = Attachment(
-                        name = replacedFile.name,
-                        contentType = "application/docx",
-                        size = replacedFile.length(),
-                        extension = "docx",
-                        path = replacedFile.absolutePath
-                    )
-                    attachmentRepository.save(newAttachment)
-
-                    contract.file = newAttachment
-                    contract.isGenerated = true
-                    contractRepository.save(contract)
-                    replacedFile
+                    generateDocx(contract)
                 }
                 files.add(contractFile)
             }
-            var zipFile:File? = null
+            val zipFile:File?
             if (job.extension == JobType.PDF){
-                val outputPdfPath = File("file/pdf")
-                if (!outputPdfPath.exists()) {
-                    outputPdfPath.mkdirs()
-                }
-                val pdfFiles = files.map {
-                        file -> convertDocxToPdf(file, outputPdfPath.absolutePath)
-                    File("${outputPdfPath.absolutePath}/${file.nameWithoutExtension}.pdf")
-                }
+                val pdfFiles = convertDocxToPdf(files)
                 zipFile = createZipFile(pdfFiles)
-                pdfFiles.forEach{pdfFile -> pdfFile.delete()}
+                pdfFiles.forEach{it.delete()}
             }else {
                 zipFile = createZipFile(files)
             }
@@ -335,6 +296,32 @@ class ContractServiceImpl(
             jobRepository.save(job)
             throw e
         }
+    }
+    private fun generateDocx(contract: Contract): File{
+        val template = contract.template
+
+        val (_, uuid, path) = attachmentMapper.createDirectoryPath(subFolder = "contract")
+        val tempFile = File("$path/$uuid.docx")
+        tempFile.createNewFile()
+
+        Files.copy(Paths.get(template.file.path), tempFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        val keys = contractDataRepository.findAllByContract(contract)
+            .associate { it.key.key to it.value }
+        val replacedFile = replaceKeysWithStyles(tempFile, keys)
+
+        val newAttachment = Attachment(
+            name = replacedFile.name,
+            contentType = "application/docx",
+            size = replacedFile.length(),
+            extension = "docx",
+            path = replacedFile.absolutePath
+        )
+        attachmentRepository.save(newAttachment)
+
+        contract.file = newAttachment
+        contract.isGenerated = true
+        contractRepository.save(contract)
+        return  replacedFile
     }
 
     private fun replaceKeysWithStyles(docxFile: File, keys: Map<String, String>): File {
@@ -360,24 +347,31 @@ class ContractServiceImpl(
         return replacedFile
     }
 
-    fun convertDocxToPdf(file: File,outputFileDir: String) {
-        val inputFile: String =file.absolutePath
-        val processBuilder = ProcessBuilder(
-            "libreoffice",
-            "--headless",
-            "--convert-to", "pdf",
-            "--outdir", outputFileDir,
-            inputFile
-        )
-
-        try {
-            val process =processBuilder.start()
-            process.waitFor()
-        } catch (e: IOException) {
-            e.printStackTrace()
-        } catch (e: InterruptedException) {
-            e.printStackTrace()
+    private fun convertDocxToPdf(files: List<File>):List<File> {
+        val outputPdfPath = File("file/pdf")
+        if (!outputPdfPath.exists()) {
+            outputPdfPath.mkdirs()
         }
+        val pdfFiles = files.map {
+                file ->
+            val processBuilder = ProcessBuilder(
+                "libreoffice",
+                "--headless",
+                "--convert-to", "pdf",
+                "--outdir", outputPdfPath.absolutePath,
+                file.absolutePath
+            )
+            try {
+                val process =processBuilder.start()
+                process.waitFor()
+            } catch (e: IOException) {
+                e.printStackTrace()
+            } catch (e: InterruptedException) {
+                e.printStackTrace()
+            }
+            File("${outputPdfPath.absolutePath}/${file.nameWithoutExtension}.pdf")
+        }
+        return pdfFiles
     }
 
     fun createZipFile(files: List<File>): File {
@@ -431,6 +425,12 @@ class ContractServiceImpl(
                 }
             }
         }
+    }
+    override fun checkDistinct(ids: List<Long>,exception: GenericException): List<Long>{
+        if (ids.distinct().size != ids.size) {
+            throw exception
+        }
+        return ids
     }
 }
 

@@ -225,7 +225,7 @@ class ContractMapper(private val userMapper: UserMapper,
             contractData = contractDataList.map {
                 ContractDataDto(
                     id = it.id !!,
-                    key = keyMapper.toDto(it.key),
+                    key = it.key.key.removeSurrounding("$"),
                     value = it.value
                 )
             },
@@ -238,7 +238,7 @@ class JobMapper {
     fun toDto(job: Job,hashId:String? = null): JobDto {
         return JobDto(
             id = job.id!!,
-            isDoc = job.isDoc,
+            extension = job.extension,
             status = job.status,
             hashId = hashId
         )

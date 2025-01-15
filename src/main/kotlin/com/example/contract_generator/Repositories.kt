@@ -215,7 +215,6 @@ interface UsersOrganizationRepository : BaseRepository<UsersOrganization>{
 
 interface AttachmentRepository : BaseRepository<Attachment> {
     fun findByHashIdAndDeletedFalse(hashId: String): Attachment?
-    fun findByName(name: String): Attachment?
 }
 
 interface ContractDataRepository : BaseRepository<ContractData>{
@@ -226,4 +225,5 @@ interface ContractDataRepository : BaseRepository<ContractData>{
 interface JobRepository : BaseRepository<Job>{
     fun findAllByAttachmentAndDeletedFalse(attachment: Attachment): Job?
     fun findAllByIdInAndCreatedByAndDeletedFalse(ids: Collection<Long>,createdBy: Long): List<Job>
+    fun findAllByCreatedByAndDeletedFalse(createdBy: Long): List<Job>
 }

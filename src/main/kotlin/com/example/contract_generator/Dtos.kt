@@ -157,10 +157,6 @@ data class GenerateContractDto(
     @field:NotNull val extension:JobType,
     @field:NotNull @field:NotBlank val list:List<ContractIdsDto>
 )
-data class  GenerateContractRequest(
-    val isDocsOrPdf: Boolean,
-    val contractData: List<Long>
-)
 data class JobDto(
     val id: Long,
     val extension: JobType,

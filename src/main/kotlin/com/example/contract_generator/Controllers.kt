@@ -68,14 +68,16 @@ class KeyController(val service: KeyService) {
 @RequestMapping("api/job")
 class JobController(private val jobService: JobService) {
 
-    @GetMapping("/{isDoc}")
-    fun generateContract(@RequestParam contractIds: List<Long>,@PathVariable isDoc: Boolean): JobDto {
-        return jobService.generateContract(contractIds, isDoc)
+    @PostMapping
+    fun generateContract(@RequestBody dto: GenerateContractDto): JobDto {
+        return jobService.generateContract(dto)
     }
-    @GetMapping("/status")
-    fun generateContract(@RequestParam jobIds: List<Long>): List<JobDto> {
+    @PostMapping("/status")
+    fun generateContract(@RequestBody jobIds: List<JobIdsDto>): List<JobDto> {
         return jobService.getStatus(jobIds)
     }
+    @GetMapping
+    fun getJobs()=jobService.getAll()
 }
 
 @RestController
@@ -95,7 +97,7 @@ class ContractController(
 
     @PutMapping
     fun updateContract(
-        @RequestBody list: List<CreateContractDataDto>
+        @RequestBody list: List<ContractDataUpdateDto>
     ): ResponseEntity<Void> {
         contractService.updateContract(list)
         return ResponseEntity.ok().build()
@@ -103,7 +105,7 @@ class ContractController(
 
     @DeleteMapping
     fun deleteContracts(
-        @RequestParam contractIds: List<Long>
+        @RequestBody contractIds: List<ContractIdsDto>
     ): ResponseEntity<Void> {
         contractService.delete(contractIds)
         return ResponseEntity.ok().build()
