@@ -48,7 +48,7 @@ interface KeyService {
     fun getAll(page: Int, size: Int): Page<KeyResponse>
     fun getAll(): List<KeyResponse>
     fun getOne(id: Long): KeyResponse
-    fun create(request: KeyCreateRequest)
+    fun create(request: KeyCreateRequest): KeyResponse
     fun update(id: Long, request: KeyUpdateRequest)
     fun delete(id: Long)
 }
@@ -365,10 +365,12 @@ class KeyServiceImpl(
         } ?: throw KeyNotFoundException()
     }
 
-    override fun create(request: KeyCreateRequest) {
+    override fun create(request: KeyCreateRequest): KeyResponse {
         val existingKey = keyRepository.findByKeyAndDeletedFalse(request.key)
         if (existingKey != null) throw KeyAlreadyExistsException()
-        keyRepository.save(keyMapper.toEntity(request))
+        val key = keyMapper.toEntity(request)
+        val savedKey = keyRepository.save(key)
+        return keyMapper.toDto(savedKey)
     }
 
     override fun update(id: Long, request: KeyUpdateRequest) {
@@ -474,7 +476,7 @@ class TemplateServiceImpl(
                         document.tables.flatMap { table ->
                             table.rows.flatMap { row -> row.tableCells.map { it.text } }
                         }).forEach { line ->
-                    regex.findAll(line).forEach { match -> keys.add(match.groupValues[1])
+                    regex.findAll(line).forEach { match -> keys.add(match.value)
                     }
                 }
             }
