@@ -569,7 +569,7 @@ class TemplateServiceImpl(
                         document.tables.flatMap { table ->
                             table.rows.flatMap { row -> row.tableCells.map { it.text } }
                         }).forEach { line ->
-                    regex.findAll(line).forEach { match -> keys.add(match.value)
+                    regex.findAll(line).forEach { match -> keys.add(match.groupValues[1])
                     }
                 }
             }
