@@ -32,7 +32,7 @@ interface UserService{
     fun createOperator(request: CreateOperatorRequest)
     fun updateOperator(request: UpdateOperatorRequest, id: Long)
     fun dismissal (operatorId: Long, organizationId: Long)
-    fun recruitment(operatorId: Long, passportId: String)
+    fun recruitment(organizationId: Long, passportId: String)
     fun getAllByOrganizationId(organizationId: Long):List<UserDto>?
     fun getCountContracts(request: ContractCountRequest): ContractCountResponse
     fun existsUserData(passportId: String, phoneNumber: String)
@@ -216,7 +216,9 @@ class ContractServiceImpl(
             if (newValue != null) {
                 contractData.value = newValue
             }
-            if (!contractData.contract.operators.contains(user) || contractData.contract.isGenerated) {
+            contractData.contract.isGenerated = false
+            contractRepository.save(contractData.contract)
+            if (!contractData.contract.operators.contains(user)) {
                 throw PermissionDenied()
             }
         }
@@ -679,9 +681,9 @@ class UserServiceImpl(
         usersOrganizationRepository.save(usersOrganization)
     }
 
-    override fun recruitment(operatorId: Long, passportId: String) {
+    override fun recruitment(organizationId: Long, passportId: String) {
         existsUserCurrentOrganization(passportId)
-        val organization = organizationRepository.findByIdAndDeletedFalse(operatorId)
+        val organization = organizationRepository.findByIdAndDeletedFalse(organizationId)
             ?: throw OrganizationNotFoundException()
         val operator = userRepository.findByPassportId(passportId)
             ?: throw UserNotFoundException()
