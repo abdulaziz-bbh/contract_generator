@@ -517,6 +517,7 @@ class TemplateServiceImpl(
     }
 
     override fun getTemplatesByOrganization(organizationId: Long): List<TemplateResponse> {
+        if (!organizationRepository.existsById(organizationId)) throw OrganizationNotFoundException()
         val templates = templateRepository.findByOrganizationIdAndDeletedFalse(organizationId)
         val sortedTemplates = templates.sortedByDescending { it.createdAt }
         return sortedTemplates.map { templateMapper.toDto(it) }
