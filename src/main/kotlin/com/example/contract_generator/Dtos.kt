@@ -22,11 +22,6 @@ data class KeyUpdateRequest(
     val key: String,
 )
 
-data class TemplateCreateRequest(
-    val templateName: String,
-    val organizationId: Long
-)
-
 data class TemplateResponse(
     val id: Long?,
     val templateName: String?,
@@ -47,11 +42,6 @@ data class TemplateDto(
 data class KeyDto(
     val id: Long?,
     val key: String?
-)
-
-data class TemplateUpdateRequest(
-    val templateName: String,
-    val keys : List<KeyResponse>
 )
 
 data class AttachmentResponse(

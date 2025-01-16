@@ -1,8 +1,6 @@
 package com.example.contract_generator
 
-import jakarta.persistence.EntityManager
 import jakarta.transaction.Transactional
-import org.apache.poi.ss.formula.functions.T
 import org.apache.poi.xwpf.usermodel.XWPFDocument
 import org.apache.poi.xwpf.usermodel.XWPFRun
 import org.springframework.core.io.InputStreamResource
@@ -170,7 +168,7 @@ class ContractServiceImpl(
         if (existingContractData.size != list.size) throw ContractDataNotFound()
         val user = getCurrentUserId()
         existingContractData.forEach { contractData ->
-            val newValue = list.get(keyIds.indexOf(contractData.id)).value
+            val newValue = list[keyIds.indexOf(contractData.id)].value
             contractData.value = newValue
             contractData.contract.isGenerated = false
             contractRepository.save(contractData.contract)
