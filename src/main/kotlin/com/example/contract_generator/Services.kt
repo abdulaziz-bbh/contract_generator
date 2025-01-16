@@ -559,8 +559,7 @@ class UserServiceImpl(
     }
 
     override fun updateOperator(request: UpdateOperatorRequest, id: Long) {
-     val user =
-            userRepository.findByIdAndDeletedFalse(it)?: throw  UserNotFoundException()
+     val user = userRepository.findByIdAndDeletedFalse(id)?: throw  UserNotFoundException()
 
         request.passportId.let {
             if (it != null) {
