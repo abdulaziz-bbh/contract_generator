@@ -50,7 +50,7 @@ interface OrganizationService{
 }
 
 interface KeyService {
-    fun getAll(page: Int, size: Int): Page<KeyResponse>
+    fun getAll(pageable: Pageable): Page<KeyResponse>
     fun getAll(): List<KeyResponse>
     fun getOne(id: Long): KeyResponse
     fun create(request: KeyCreateRequest): KeyResponse
@@ -59,7 +59,7 @@ interface KeyService {
 }
 
 interface TemplateService {
-    fun getAll(page: Int, size: Int): Page<TemplateResponse>
+    fun getAll(pageable: Pageable): Page<TemplateResponse>
     fun getAll(): List<TemplateResponse>
     fun getOne(id: Long): TemplateResponse
     fun getTemplatesByOrganization(organizationId: Long): List<TemplateResponse>
@@ -436,13 +436,15 @@ class ContractServiceImpl(
 @Service
 class KeyServiceImpl(
     private val keyMapper: KeyMapper,
-    private val entityManager: EntityManager,
     private val keyRepository: KeyRepository
 ) : KeyService {
 
-    override fun getAll(page: Int, size: Int): Page<KeyResponse> {
-        val pageable: Pageable = PageRequest.of(page, size, Sort.by(Sort.Order.desc("createdAt")))
-        val usersPage = keyRepository.findAllNotDeletedForPageable(pageable)
+    override fun getAll(pageable: Pageable): Page<KeyResponse> {
+        val sortedPageable = PageRequest.of(
+            pageable.pageNumber,
+            pageable.pageSize,
+            Sort.by(Sort.Direction.DESC, "createdAt"))
+        val usersPage = keyRepository.findAllNotDeletedForPageable(sortedPageable)
         return usersPage.map { keyMapper.toDto(it) }
     }
 
@@ -468,9 +470,6 @@ class KeyServiceImpl(
     }
 
     override fun update(id: Long, request: KeyUpdateRequest) {
-        if (request.key.isBlank()) {
-            throw BadRequestException()
-        }
         val key = keyRepository.findByIdAndDeletedFalse(id) ?: throw KeyNotFoundException()
         keyRepository.findByName(id, request.key)?.let { throw KeyAlreadyExistsException() }
 
@@ -496,9 +495,12 @@ class TemplateServiceImpl(
     //private val attachment: AttachmentMapper
 ) : TemplateService {
 
-    override fun getAll(page: Int, size: Int): Page<TemplateResponse> {
-        val pageable: Pageable = PageRequest.of(page, size, Sort.by(Sort.Order.desc("createdAt")))
-        val usersPage = templateRepository.findAllNotDeletedForPageable(pageable)
+    override fun getAll(pageable: Pageable): Page<TemplateResponse> {
+        val sortedPageable = PageRequest.of(
+            pageable.pageNumber,
+            pageable.pageSize,
+            Sort.by(Sort.Direction.DESC, "createdAt"))
+        val usersPage = templateRepository.findAllNotDeletedForPageable(sortedPageable)
         return usersPage.map { templateMapper.toDto(it) }
     }
 

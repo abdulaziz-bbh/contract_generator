@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.data.domain.Pageable
 
 @ControllerAdvice
 class ExceptionHandler(private val errorMessageSource: ResourceBundleMessageSource) {
@@ -42,11 +43,7 @@ class KeyController(val service: KeyService) {
 
 
     @GetMapping("/page")
-    fun getAll(
-        @RequestParam(value = "page", defaultValue = "0") page: Int,
-        @RequestParam(value = "size", defaultValue = "10") size: Int
-    ) =
-        service.getAll(page, size)
+    fun getAll(pageable: Pageable) = service.getAll()
 
 
     @GetMapping("{id}")
@@ -137,11 +134,7 @@ class TemplateController(val service: TemplateService) {
 
 
     @GetMapping("/page")
-    fun getAll(
-        @RequestParam(value = "page", defaultValue = "0") page: Int,
-        @RequestParam(value = "size", defaultValue = "10") size: Int
-    ) =
-        service.getAll(page, size)
+    fun getAll(pageable: Pageable) = service.getAll(pageable)
 
     @GetMapping("{id}")
     fun getOne(@PathVariable id: Long) = service.getOne(id)
