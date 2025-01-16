@@ -67,7 +67,7 @@ class JobController(private val jobService: JobService) {
     @PostMapping
     fun generateContract(@RequestBody @Valid dto: GenerateContractDto)=jobService.generateContract(dto)
     @PostMapping("/status")
-    fun generateContract(@RequestBody @Valid jobIds: List<JobIdsDto>)=jobService.getStatus(jobIds)
+    fun generateContract(@RequestBody @Valid jobIds: JobIdsDto)=jobService.getStatus(jobIds)
     @GetMapping
     fun getJobs()=jobService.getAll()
 }
@@ -82,7 +82,7 @@ class ContractController(
     @PutMapping
     fun updateContract(@RequestBody @Valid list: List<ContractDataUpdateDto>)=contractService.updateContract(list)
     @DeleteMapping
-    fun deleteContracts(@RequestBody @Valid contractIds: List<ContractIdsDto>)=contractService.delete(contractIds)
+    fun deleteContracts(@RequestBody @Valid contractIds: ContractIdsDto)=contractService.delete(contractIds)
     @GetMapping
     fun getAllContracts(@RequestParam(required = false) isGenerated: Boolean?)= contractService.getAll(isGenerated)
     @GetMapping("/{contractId}")
