@@ -56,9 +56,7 @@ class KeyMapper {
 }
 
 @Component
-class TemplateMapper(
-    private val keyMapper: KeyMapper
-) {
+class TemplateMapper {
 
     fun toDto(template: Template): TemplateResponse {
         return template.run {
@@ -71,13 +69,6 @@ class TemplateMapper(
                 organizationName = this.organization.name
             )
         }
-    }
-
-    private fun toKeyResponse(key: Key): KeyResponse {
-        return KeyResponse(
-            id = key.id,
-            key = key.key
-        )
     }
 
     private fun toAttachmentResponse(attachment: Attachment): AttachmentResponse {
