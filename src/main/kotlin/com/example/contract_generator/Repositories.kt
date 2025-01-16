@@ -173,6 +173,11 @@ interface UserRepository : BaseRepository<User>{
 
 interface OrganizationRepository : BaseRepository<Organization>{
     fun existsByName(name: String): Boolean
+
+    @Query("""
+        select exists(select o from Organization o where o.name = :name and o.id != :organizationId)
+    """)
+    fun existsByNameAndId(organizationId: Long, name: String): Boolean
 }
 
 interface UsersOrganizationRepository : BaseRepository<UsersOrganization>{
