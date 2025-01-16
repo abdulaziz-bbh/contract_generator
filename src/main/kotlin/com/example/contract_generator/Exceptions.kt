@@ -77,6 +77,11 @@ class OrganizationNotFoundException: GenericException() {
 class NotFoundOperatorOrOrganizationException: GenericException() {
     override fun errorCode(): ErrorCode = ErrorCode.NOT_FOUND_OPERATOR_IN_ORGANIZATION
 }
+
+class OperatorAlreadyCurrentException: GenericException() {
+    override fun errorCode(): ErrorCode = ErrorCode.OPERATION_ALREADY_CURRENT
+}
+
 class UserAlreadyExistsException: GenericException() {
     override fun errorCode(): ErrorCode = ErrorCode.USER_ALREADY_EXISTS
 }
@@ -103,4 +108,19 @@ class ContractNotFound(): GenericException(){
 }
 class ContractDataNotFound(): GenericException(){
     override fun errorCode(): ErrorCode = ErrorCode.CONTRACT_DATA_NOT_FOUND
+}
+class DuplicateKey:GenericException(){
+    override fun errorCode(): ErrorCode = ErrorCode.DUPLICATE_KEY
+}
+class DuplicateContract:GenericException(){
+    override fun errorCode(): ErrorCode = ErrorCode.DUPLICATE_CONTRACT
+}
+class MissingTemplateKeys:GenericException(){
+    override fun errorCode(): ErrorCode = ErrorCode.MISSING_TEMPLATE_KEY
+}
+class PermissionDenied:GenericException(){
+    override fun errorCode(): ErrorCode = ErrorCode.PERMISSION_DENIED
+}
+class JobNotFound:GenericException(){
+    override fun errorCode(): ErrorCode = ErrorCode.JOB_NOT_FOUND
 }

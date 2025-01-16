@@ -9,6 +9,24 @@ import org.springframework.stereotype.Component
 import java.io.File
 
 @Component
+class OrganizationMapper{
+
+    fun toDto(organization: Organization): OrganizationDto {
+        return OrganizationDto(
+            id = organization.id!!,
+            name = organization.name,
+            address = organization.address,
+        )
+    }
+    fun fromUpdateDto(request: UpdateOrganizationRequest, organization: Organization): Organization {
+        request.run {
+            name?.let { organization.name = it }
+            address?.let { organization.address = it }
+            return organization
+        }
+    }
+}
+@Component
 class KeyMapper {
 
     fun toDto(key: Key): KeyResponse {
@@ -177,9 +195,9 @@ class UserMapper(
     }
     fun fromUpdateDto(request: UpdateOperatorRequest, user: User):User{
         request.run {
-            if (fullName != null) user.fullName = fullName
-            if (phoneNumber != null) user.phoneNumber = phoneNumber
-            if (passportId != null) user.passportId = passportId
+            fullName?.let { user.fullName = it }
+            phoneNumber?.let { user.phoneNumber = it }
+            passportId?.let { user.passportId = it }
         }
         return user
     }
@@ -187,23 +205,31 @@ class UserMapper(
 
 @Component
 class ContractMapper(private val userMapper: UserMapper,
-    private val attachmentMapper: AttachmentMapper,
-    private val templateMapper: TemplateMapper,
     private val keyMapper: KeyMapper) {
     fun toDto(contract: Contract, contractDataList: List<ContractData>): ContractResponseDto {
         return ContractResponseDto(
             id = contract.id!!,
-            template = templateMapper.toDto(contract.template),
-            attachment = contract.file?.let { attachmentMapper.toInfo(it) },
+            templateName = contract.template.templateName,
             operators = contract.operators.map { userMapper.toDto(it) },
             contractData = contractDataList.map {
                 ContractDataDto(
-                    id = it.id ?: throw IllegalStateException("ContractData ID cannot be null."),
-                    key = keyMapper.toDto(it.key),
+                    id = it.id !!,
+                    key = it.key.key.removeSurrounding("$"),
                     value = it.value
                 )
             },
             isGenerated = contract.isGenerated
+        )
+    }
+}
+@Component
+class JobMapper {
+    fun toDto(job: Job,hashId:String? = null): JobDto {
+        return JobDto(
+            id = job.id!!,
+            extension = job.extension,
+            status = job.status,
+            hashId = hashId
         )
     }
 }

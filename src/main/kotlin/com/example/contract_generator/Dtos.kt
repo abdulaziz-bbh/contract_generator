@@ -1,6 +1,9 @@
 package com.example.contract_generator
 
+import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
+import jakarta.validation.constraints.Positive
+import java.time.LocalDate
 
 
 data class BaseMessage(val code: Int, val message: String?)
@@ -51,18 +54,18 @@ data class AttachmentResponse(
 
 
 data class CreateDirectorRequest(
-    @field:NotNull val fullName: String,
-    @field:NotNull val password: String,
-    @field:NotNull val phoneNumber: String,
-    @field:NotNull val passportId: String
+    val fullName: String,
+    val password: String,
+    val phoneNumber: String,
+    val passportId: String
 )
 
 data class CreateOperatorRequest(
-    @field:NotNull val fullName: String,
-    @field:NotNull val password: String,
-    @field:NotNull val phoneNumber: String,
-    @field:NotNull val passportId: String,
-    @field:NotNull val organizationId: Long
+    val fullName: String,
+    val password: String,
+    val phoneNumber: String,
+    val passportId: String,
+    val organizationId: Long
 )
 data class UpdateOperatorRequest(
     val fullName: String?,
@@ -79,8 +82,8 @@ data class UserDto(
 )
 
 data class LoginRequest(
-    @field:NotNull val username: String,
-    @field:NotNull val password: String,
+    val username: String,
+    val password: String,
 )
 
 data class AuthenticationDto(
@@ -89,8 +92,8 @@ data class AuthenticationDto(
 )
 
 data class CreateOrganizationRequest(
-    @field:NotNull val name: String,
-    @field:NotNull val address: String,
+    val name: String,
+    val address: String,
 )
 data class UpdateOrganizationRequest(
     val name: String?,
@@ -107,13 +110,16 @@ data class AttachmentInfo(
 )
 
 data class ContractRequestDto(
-    val contractData: Map<Long,String>
+    val contractData: List<CreateContractDataDto>
+)
+data class CreateContractDataDto(
+    @field:NotNull val keyId: Long,
+    @field:NotNull val value: String
 )
 
 data class ContractResponseDto(
     val id: Long,
-    val template: TemplateResponse,
-    val attachment: AttachmentInfo?,
+    val templateName: String,
     val operators: List<UserDto>,
     val contractData: List<ContractDataDto>,
     val isGenerated: Boolean
@@ -121,16 +127,45 @@ data class ContractResponseDto(
 
 data class ContractDataDto(
     val id: Long,
-    val key: KeyResponse,
+    val key: String,
     val value: String
 )
 
-data class ContractUpdateDto(
-    val fileName: String,
-    val keys: Map<String,String>
+data class ContractDataUpdateDto(
+    @field:NotNull @field:Positive val contractDataId: Long,
+    @field:NotNull @field: NotBlank val value: String
 )
-data class  GenerateContractRequest(
-    val isDocsOrPdf: Boolean,
-    val contractData: List<Long>
+data class ContractIdsDto(
+    @field:NotNull @field: Positive val contractId: Long
 )
-    
+data class JobIdsDto(
+    @field:NotNull @field: Positive val jobId: Long
+)
+
+data class GenerateContractDto(
+    @field:NotNull val extension:JobType,
+    @field:NotNull @field:NotBlank val list:List<ContractIdsDto>
+)
+data class JobDto(
+    val id: Long,
+    val extension: JobType,
+    val status: JobStatus,
+    val hashId: String?,
+)
+
+data class OrganizationDto(
+    val id: Long,
+    val name: String,
+    val address: String
+)
+
+data class ContractCountRequest(
+    val organizationId: Long,
+    val operatorId: Long?,
+    val date: LocalDate?
+)
+
+data class ContractCountResponse(
+    val organizationId: Long,
+    val countContract: Int
+)

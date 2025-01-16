@@ -1,6 +1,7 @@
 package com.example.contract_generator
 
 import jakarta.persistence.*
+import org.hashids.Hashids
 import org.hibernate.annotations.ColumnDefault
 import org.springframework.data.annotation.CreatedBy
 import org.springframework.data.annotation.CreatedDate
@@ -38,7 +39,21 @@ class User(
     override fun isAccountNonLocked(): Boolean = true
     override fun isCredentialsNonExpired(): Boolean = true
     override fun isEnabled(): Boolean = true
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other == null || javaClass != other.javaClass) return false
+        other as User
 
+        return id == other.id &&
+                fullName == other.fullName &&
+                phoneNumber == other.phoneNumber &&
+                passportId == other.passportId &&
+                passWord == other.passWord &&
+                role == other.role
+    }
+    override fun hashCode(): Int {
+        return Objects.hash(id, fullName, phoneNumber, passportId, passWord, role)
+    }
 }
 
 @Entity
@@ -52,7 +67,7 @@ class UsersOrganization(
 
     @ManyToOne val user: User,
     @ManyToOne val organization: Organization,
-    var isCurrentUser: Boolean,
+    @Column(nullable = false) var isCurrentUser: Boolean = false,
     var leftDate: Date? = null
 
 ) : BaseEntity()
@@ -63,8 +78,15 @@ class Attachment(
     @Column(nullable = false) val contentType: String,
     @Column(nullable = false) var size: Long,
     @Column(nullable = false) val extension: String,
-    @Column(nullable = false) val path: String
-) : BaseEntity()
+    @Column(nullable = false) val path: String,
+    @Column(nullable = true) var hashId: String?=null,
+) : BaseEntity(){
+    @PostPersist
+    fun generateHashids() {
+            val hashids = Hashids(this.javaClass.name,10)
+            this.hashId = hashids.encode(this.id!!)
+    }
+}
 
 @Entity
 class Key(
@@ -82,9 +104,9 @@ class Template(
 @Entity
 class Contract(
     @ManyToOne val template: Template,
-    @OneToOne val file: Attachment? = null,
+    @OneToOne var file: Attachment? = null,
     @ManyToMany val operators : MutableList<User> = mutableListOf(),
-    val isGenerated: Boolean = false
+    var isGenerated: Boolean = false
 
 ) : BaseEntity()
 
@@ -94,3 +116,11 @@ class ContractData(
     @Column(nullable = false) var value: String,
     @ManyToOne val contract: Contract,
 ) : BaseEntity()
+
+@Entity
+class Job(
+    @Enumerated(EnumType.STRING) val extension: JobType,
+    @OneToOne var attachment: Attachment? = null,
+    @ManyToMany val contracts: MutableList<Contract> = mutableListOf(),
+    @Enumerated(value = EnumType.STRING) var status: JobStatus=JobStatus.PENDING
+): BaseEntity()

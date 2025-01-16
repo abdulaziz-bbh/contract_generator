@@ -1,26 +1,26 @@
 package com.example.contract_generator
 
-import jakarta.persistence.EntityManager
 import jakarta.transaction.Transactional
 import org.apache.poi.xwpf.usermodel.XWPFDocument
+import org.apache.poi.xwpf.usermodel.XWPFRun
 import org.springframework.core.io.InputStreamResource
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable
+import org.springframework.data.domain.Sort
+import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
-import org.springframework.stereotype.Service
-import org.apache.poi.xwpf.usermodel.XWPFRun
-import org.springframework.http.HttpHeaders
+import org.springframework.scheduling.annotation.Async
 import org.springframework.security.authentication.AuthenticationManager
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.userdetails.UserDetailsService
-import org.springframework.beans.factory.annotation.Value
-import org.springframework.data.domain.Sort
+import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
 import java.io.*
 import java.nio.file.Files
-import java.time.LocalDate
+import java.nio.file.Paths
+import java.nio.file.StandardCopyOption
 import java.util.*
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -29,19 +29,22 @@ import java.util.zip.ZipOutputStream
 interface UserService{
     fun createOperator(request: CreateOperatorRequest)
     fun updateOperator(request: UpdateOperatorRequest, id: Long)
-    fun existsUserData(passportId: String, phoneNumber: String)
     fun dismissal (operatorId: Long, organizationId: Long)
+    fun recruitment(organizationId: Long, passportId: String)
     fun getAllByOrganizationId(organizationId: Long):List<UserDto>?
+    fun getCountContracts(request: ContractCountRequest): ContractCountResponse
+    fun existsUserData(passportId: String, phoneNumber: String)
+    fun existsUserCurrentOrganization(passportId: String)
 }
 interface AuthService{
     fun registration(request: CreateDirectorRequest)
     fun login(request: LoginRequest) : AuthenticationDto
-//    fun refreshToken(request: HttpServletRequest, response: HttpServletResponse)
 }
 interface OrganizationService{
     fun create(request: CreateOrganizationRequest)
     fun update(request: UpdateOrganizationRequest, id: Long)
     fun existsByName(name: String)
+    fun getAll(directorId: Long): List<OrganizationDto>
 }
 
 interface KeyService {
@@ -65,7 +68,7 @@ interface TemplateService {
 
 interface AttachmentService {
     fun upload(multipartFile: MultipartFile , subFolder : String? = null): AttachmentInfo
-    fun download(id: Long): ResponseEntity<*>
+    fun download(hashId: String): ResponseEntity<*>
     fun preview(id: Long): ResponseEntity<*>
     fun findById(id: Long): Attachment
     fun delete(id: Long)
@@ -73,140 +76,154 @@ interface AttachmentService {
 
 interface ContractService{
     fun createContract(templateId: Long, list: List<ContractRequestDto>): List<ContractResponseDto>
-    fun updateContract(list: List<ContractRequestDto>)
-    fun getZip(list: List<String>): ResponseEntity<*>
-    fun getPdfsZip(date: LocalDate):ResponseEntity<*>
-    fun delete(contractIds: List<Long>)
+    fun updateContract(list: List<ContractDataUpdateDto>)
+    fun delete(contractIds: List<ContractIdsDto>)
     fun getAll(isGenerated:Boolean?): List<ContractResponseDto>
     fun findById(contractId: Long):ContractResponseDto
+    fun generateZip(job: Job)
+    fun checkDistinct(ids: List<Long>,exception: GenericException): List<Long>
+}
+interface JobService{
+    fun generateContract(dto: GenerateContractDto): JobDto
+    fun getStatus(jobIds: List<JobIdsDto>): List<JobDto>
+    fun getAll():List<JobDto>
+}
+@Service
+class JobServiceImpl(
+    private val jobRepository: JobRepository,
+    private val contractRepository: ContractRepository,
+    private val jobMapper: JobMapper,
+    private val contractService:ContractService
+): JobService {
+    @Transactional
+    override fun generateContract(dto: GenerateContractDto): JobDto {
+        val ids = contractService.checkDistinct(dto.list.map { it.contractId },DuplicateContract())
+        if (!contractRepository.existsAllByOperatorsAndDeletedFalse(
+                ids,
+                getCurrentUserId()!!,
+                ids.size.toLong()
+            )
+        ) {
+            throw PermissionDenied()
+        }
+        val contracts = contractRepository.findAllByIdInAndDeletedFalse(ids)
+        if (contracts.size != ids.size) {
+            throw ContractNotFound()
+        }
+
+        val job = Job(extension = dto.extension)
+        job.contracts.addAll(contracts)
+
+        contractService.generateZip(jobRepository.save(job))
+        return jobMapper.toDto(job)
+    }
+
+    override fun getStatus(jobIds: List<JobIdsDto>): List<JobDto> {
+        val jobs = jobRepository.findAllByIdInAndCreatedByAndDeletedFalse(jobIds.map { it.jobId }, getCurrentUserId()?.id!!)
+        if (jobs.size != jobIds.size) {
+            throw JobNotFound()
+        }
+        return jobs.map {
+            job-> jobMapper.toDto(job,job.attachment?.hashId)
+        }
+    }
+
+    override fun getAll(): List<JobDto> {
+        return jobRepository.findAllByCreatedByAndDeletedFalse(getCurrentUserId()?.id!!).map { jobMapper.toDto(it,it.attachment?.hashId) }
+    }
 }
 
 @Service
 class ContractServiceImpl(
     private val templateRepository: TemplateRepository,
-    private val attachmentRepository: AttachmentRepository,
-    private val attachmentMapper: AttachmentMapper,
     private val contractRepository: ContractRepository,
     private val contractDataRepository: ContractDataRepository,
     private val keyRepository: KeyRepository,
-    private val contractMapper: ContractMapper
+    private val contractMapper: ContractMapper,
+    private val usersOrganizationRepository: UsersOrganizationRepository,
+    private val attachmentMapper: AttachmentMapper,
+    private val jobRepository: JobRepository,
+    private val attachmentRepository: AttachmentRepository
 
 ): ContractService{
     @Transactional
     override fun createContract(templateId: Long, list: List<ContractRequestDto>): List<ContractResponseDto> {
         val template: Template = templateRepository.findByIdAndDeletedFalse(templateId)
             ?: throw TemplateNotFoundException()
+        if(template.organization != getCurrentOrganization(usersOrganizationRepository))(
+                throw TemplateNotFoundException()
+        )
         val currentUser = getCurrentUserId()?:throw UserNotFoundException()
 
-        var responseDtos = mutableListOf<ContractResponseDto>()
-        list.map { contractRequestDto ->
-            val keyIds = contractRequestDto.contractData.keys
-            val keys = keyRepository.findAllByIdInAndDeletedFalse(keyIds.toList())
+        if (list.size != list.distinctBy { it.contractData }.size) {
+            throw DuplicateContract()
+        }
+        val requiredKeyIds = template.keys.map { it.id }.toSet()
 
-            val unresolvedKeyIds = keyIds - keys.map { it.id }
+        val responseDtos = mutableListOf<ContractResponseDto>()
+
+        list.forEach { contractRequestDto ->
+            val keyIds = checkDistinct(contractRequestDto.contractData.map { it.keyId },DuplicateKey())
+
+            if (!requiredKeyIds.all { it in keyIds }) {
+                throw MissingTemplateKeys()
+            }
+            val keys = keyRepository.findAllByIdInAndDeletedFalse(keyIds)
+
+            val unresolvedKeyIds = keyIds - keys.map { it.id }.toSet()
             if (unresolvedKeyIds.isNotEmpty()) {
                 throw KeyNotFoundException()
             }
-            val contract = Contract(
-                template = template,
-            ).apply {
+
+            val contract = Contract(template = template).apply {
                 operators.add(currentUser)
             }
             contractRepository.save(contract)
 
-            val contractDataList = keys.map { key ->
+            val contractDataList = contractRequestDto.contractData.map { contractData ->
+                val key = keys.find { it.id == contractData.keyId }
+                    ?: throw KeyNotFoundException()
                 ContractData(
                     key = key,
-                    value = contractRequestDto.contractData[key.id]?:throw KeyNotFoundException(),
+                    value = contractData.value,
                     contract = contract
                 )
             }
             contractDataRepository.saveAll(contractDataList)
             responseDtos.add(contractMapper.toDto(contract, contractDataList))
         }
+
         return responseDtos
     }
 
+    @Transactional
+    override fun updateContract(list: List<ContractDataUpdateDto>) {
+        val keyIds = checkDistinct(list.map { it.contractDataId},DuplicateKey())
+        val existingContractData = contractDataRepository.findAllByIdInAndDeletedFalse(keyIds)
+        if (existingContractData.size != list.size) {
+            throw ContractDataNotFound()
+        }
+        val user = getCurrentUserId()
+        existingContractData.forEach { contractData ->
+            val newValue = list[keyIds.indexOf(contractData.id)].value
+            contractData.value = newValue
+            contractData.contract.isGenerated = false
+            contractRepository.save(contractData.contract)
+            if (!contractData.contract.operators.contains(user)) {
+                throw PermissionDenied()
+            }
+        }
+        contractDataRepository.saveAll(existingContractData)
+    }
 
 
     @Transactional
-    override fun updateContract(list: List<ContractRequestDto>){
-        list.forEach { contractRequestDto ->
-            val contractDataIds = contractRequestDto.contractData.keys
-            val contractDataList = contractDataRepository.findAllByIdInAndDeletedFalse(contractDataIds.toList())
-
-            val unresolvedDataIds = contractDataIds - contractDataList.mapNotNull { it.id }
-            if (unresolvedDataIds.isNotEmpty()) {
-                throw ContractDataNotFound()
-            }
-            contractDataList.forEach { contractData ->
-                val newValue = contractRequestDto.contractData[contractData.id]
-                if (newValue != null) {
-                    contractData.value = newValue
-                }
-            }
-            contractDataRepository.saveAll(contractDataList)
+    override fun delete(contractIds: List<ContractIdsDto>) {
+        val ids = checkDistinct(contractIds.map { it.contractId },DuplicateContract())
+        if (!contractRepository.existsAllByOperatorsAndDeletedFalse(ids, getCurrentUserId()!!,contractIds.size.toLong())){
+            throw PermissionDenied()
         }
-    }
-
-
-    override fun getZip(list: List<String>): ResponseEntity<*> {
-        var files :MutableList<File> = mutableListOf()
-        for (s in list) {
-            files.add(contractRepository.findByFile_Name(s)?.let {
-                File(it.file?.path)
-            }
-                ?: throw ContractNotFound())
-        }
-        val pdfPath = "${attachmentMapper.filePath}/pdf"
-        val file = File(pdfPath)
-        if (!file.exists()) {
-            file.mkdirs()
-        }
-        val pdfFiles = mutableListOf<File>()
-        for (f in files) {
-            convertDocxToPdf(f.absolutePath, pdfPath)
-            pdfFiles.add(File("${pdfPath}/${f.nameWithoutExtension}.pdf"))
-        }
-        return createZipFile(pdfFiles)
-    }
-
-    override fun getPdfsZip(date: LocalDate): ResponseEntity<*> {
-
-        val year = date.year
-        val month = date.monthValue
-        val day = date.dayOfMonth
-
-        val contractFolderPath = "file/$year/$month/$day/contract"
-        val contractFolder = File(contractFolderPath)
-
-        if (!contractFolder.exists() || !contractFolder.isDirectory) {
-            throw ContractNotFound()
-        }
-
-        val docxFiles = contractFolder.listFiles { file -> file.extension == "docx" } ?: emptyArray()
-
-        if (docxFiles.isEmpty()) {
-            return ResponseEntity.accepted().body<Any>(null)
-        }
-        val pdfPath = "${attachmentMapper.filePath}/pdf"
-        val file = File(pdfPath)
-        if (!file.exists()) {
-            file.mkdirs()
-        }
-
-        val pdfFiles = mutableListOf<File>()
-        for (docxFile in docxFiles) {
-            convertDocxToPdf(docxFile.absolutePath, pdfPath)
-            pdfFiles.add(File("${pdfPath}/${docxFile.nameWithoutExtension}.pdf"))
-        }
-
-        return createZipFile(pdfFiles)
-    }
-
-    @Transactional
-    override fun delete(contractIds: List<Long>) {
-        val trashedContracts = contractRepository.trashList(contractIds)
+        val trashedContracts = contractRepository.trashList(ids)
         if (trashedContracts.any { it == null }) {
             throw ContractNotFound()
         }
@@ -216,13 +233,12 @@ class ContractServiceImpl(
         }
     }
 
-
-
     override fun getAll(isGenerated: Boolean?): List<ContractResponseDto> {
+        val user= getCurrentUserId()!!
         val contracts = if (isGenerated != null) {
-            contractRepository.findByIsGeneratedAndDeletedFalse(isGenerated)
+            contractRepository.findByOperatorAndIsGeneratedAndDeletedFalse(user,isGenerated)
         } else {
-            contractRepository.findAllNotDeleted()
+            contractRepository.getAllByOperatorAndDeletedFalse(user)
         }
         return contracts.map { contract ->
             contractMapper.toDto(contract, contractDataRepository.findAllByContract(contract))
@@ -234,9 +250,76 @@ class ContractServiceImpl(
         val contract = contractRepository.findByIdAndDeletedFalse(contractId)
             ?: throw ContractNotFound()
 
+        if (!contract.operators.contains(getCurrentUserId()!!)) {
+            throw PermissionDenied()
+        }
         return contractMapper.toDto(contract, contractDataRepository.findAllByContract(contract))
     }
+    @Async
+    override fun generateZip(job: Job) {
+        val files: MutableList<File> = mutableListOf()
+        try {
+            job.contracts.forEach { contract ->
+                val contractFile = if (contract.isGenerated) {
+                    contract.file?.let { File(it.path) }
+                        ?: throw AttachmentNotFound()
+                } else {
+                    generateDocx(contract)
+                }
+                files.add(contractFile)
+            }
+            val zipFile:File?
+            if (job.extension == JobType.PDF){
+                val pdfFiles = convertDocxToPdf(files)
+                zipFile = createZipFile(pdfFiles)
+                pdfFiles.forEach{it.delete()}
+            }else {
+                zipFile = createZipFile(files)
+            }
+            val zipAttachment = Attachment(
+                name = zipFile.name,
+                contentType = "application/zip",
+                size = zipFile.length(),
+                extension = "zip",
+                path = zipFile.absolutePath
+            )
+            attachmentRepository.save(zipAttachment)
 
+            job.attachment = zipAttachment
+            job.status = JobStatus.COMPLETED
+            jobRepository.save(job)
+        } catch (e: Exception) {
+            job.status = JobStatus.FAILED
+            jobRepository.save(job)
+            throw e
+        }
+    }
+    private fun generateDocx(contract: Contract): File{
+        val template = contract.template
+
+        val (_, uuid, path) = attachmentMapper.createDirectoryPath(subFolder = "contract")
+        val tempFile = File("$path/$uuid.docx")
+        tempFile.createNewFile()
+
+        Files.copy(Paths.get(template.file.path), tempFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        val keys = contractDataRepository.findAllByContract(contract)
+            .associate { it.key.key to it.value }
+        val replacedFile = replaceKeysWithStyles(tempFile, keys)
+
+        val newAttachment = Attachment(
+            name = replacedFile.name,
+            contentType = "application/docx",
+            size = replacedFile.length(),
+            extension = "docx",
+            path = replacedFile.absolutePath
+        )
+        attachmentRepository.save(newAttachment)
+
+        contract.file = newAttachment
+        contract.isGenerated = true
+        contractRepository.save(contract)
+        return  replacedFile
+    }
 
     private fun replaceKeysWithStyles(docxFile: File, keys: Map<String, String>): File {
         val wordDoc = XWPFDocument(Files.newInputStream(docxFile.toPath()))
@@ -261,26 +344,34 @@ class ContractServiceImpl(
         return replacedFile
     }
 
-    fun convertDocxToPdf(inputFile: String, outputFileDir: String) {
-        val processBuilder = ProcessBuilder(
-            "libreoffice",
-            "--headless",
-            "--convert-to", "pdf",
-            "--outdir", outputFileDir,
-            inputFile
-        )
-
-        try {
-            val process =processBuilder.start()
-            process.waitFor()
-        } catch (e: IOException) {
-            e.printStackTrace()
-        } catch (e: InterruptedException) {
-            e.printStackTrace()
+    private fun convertDocxToPdf(files: List<File>):List<File> {
+        val outputPdfPath = File("file/pdf")
+        if (!outputPdfPath.exists()) {
+            outputPdfPath.mkdirs()
         }
+        val pdfFiles = files.map {
+                file ->
+            val processBuilder = ProcessBuilder(
+                "libreoffice",
+                "--headless",
+                "--convert-to", "pdf",
+                "--outdir", outputPdfPath.absolutePath,
+                file.absolutePath
+            )
+            try {
+                val process =processBuilder.start()
+                process.waitFor()
+            } catch (e: IOException) {
+                e.printStackTrace()
+            } catch (e: InterruptedException) {
+                e.printStackTrace()
+            }
+            File("${outputPdfPath.absolutePath}/${file.nameWithoutExtension}.pdf")
+        }
+        return pdfFiles
     }
 
-    fun createZipFile(files: List<File>): ResponseEntity<*> {
+    fun createZipFile(files: List<File>): File {
         val zipFilePath =  "${attachmentMapper.filePath}/zip/${UUID.randomUUID()}.zip"
 
         val parentDir = File(zipFilePath).parentFile
@@ -305,13 +396,8 @@ class ContractServiceImpl(
             e.printStackTrace()
         }
 
-        val resource = InputStreamResource(FileInputStream(zipFile))
-        return ResponseEntity.ok()
-            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"${zipFile.name}\"")
-            .contentType(MediaType.APPLICATION_OCTET_STREAM)
-            .body(resource)
+        return zipFile
     }
-
 
     private fun replaceTextInRuns(runs: List<XWPFRun>, keys: Map<String, String>) {
         runs.forEach { run ->
@@ -336,6 +422,12 @@ class ContractServiceImpl(
                 }
             }
         }
+    }
+    override fun checkDistinct(ids: List<Long>,exception: GenericException): List<Long>{
+        if (ids.distinct().size != ids.size) {
+            throw exception
+        }
+        return ids
     }
 }
 
@@ -539,12 +631,14 @@ class UserServiceImpl(
     private val userRepository: UserRepository,
     private val userMapper: UserMapper,
     private val organizationRepository: OrganizationRepository,
-    private val usersOrganizationRepository: UsersOrganizationRepository
+    private val usersOrganizationRepository: UsersOrganizationRepository,
+    private val contractRepository: ContractRepository
 ): UserService {
 
     @Transactional
     override fun createOperator(request: CreateOperatorRequest) {
         existsUserData(request.passportId, request.phoneNumber)
+        existsUserCurrentOrganization(request.passportId)
         val operator = userRepository.save(userMapper.toEntity(request))
         val usersOrganization = UsersOrganization(
             user = operator,
@@ -556,48 +650,77 @@ class UserServiceImpl(
     }
 
     override fun updateOperator(request: UpdateOperatorRequest, id: Long) {
-     val user =  id.let {
-            userRepository.findByIdAndDeletedFalse(it)?: throw  UserNotFoundException()
-        }
-        request.passportId.let {
-            if (it != null) {
-                if (userRepository.findByPassportId(it, id) != null) {
-                    throw PassportIdAlreadyUsedException()
-                }
-            }
-        }
-        request.phoneNumber.let {
-            if (it != null) {
-                if (userRepository.findByPhoneNumber(it, id) != null) {
-                    throw UserAlreadyExistsException()
-                }
-            }
-        }
+     val user =  id.let { userRepository.findByIdAndDeletedFalse(it)
+            ?: throw  UserNotFoundException() }
+        request.passportId?.let { userRepository.existsUserIdAndPassportId(it, id)
+            ?:throw PassportIdAlreadyUsedException() }
+        request.phoneNumber?.let {(userRepository.findByPhoneNumber(it, id))
+            ?:throw UserAlreadyExistsException() }
         userRepository.save(userMapper.fromUpdateDto(request, user ))
+    }
+
+    override fun dismissal(operatorId: Long, organizationId: Long) {
+        operatorId.let {userRepository.findByIdAndDeletedFalse(it)
+            ?:throw  UserNotFoundException()}
+        organizationId.let {organizationRepository.findByIdAndDeletedFalse(it)
+            ?: throw OrganizationNotFoundException()}
+
+        val usersOrganization = usersOrganizationRepository.findByOrganizationIdAndUserId(organizationId, operatorId)?: throw UserNotFoundException()
+        usersOrganization.isCurrentUser = false
+        usersOrganization.leftDate = Date()
+        usersOrganizationRepository.save(usersOrganization)
+    }
+
+    override fun recruitment(organizationId: Long, passportId: String) {
+        existsUserCurrentOrganization(passportId)
+        val organization = organizationRepository.findByIdAndDeletedFalse(organizationId)
+            ?: throw OrganizationNotFoundException()
+        val operator = userRepository.findByPassportId(passportId)
+            ?: throw UserNotFoundException()
+
+        val userOrganization = UsersOrganization(
+            user = operator,
+            organization = organization,
+            isCurrentUser = true
+        )
+        usersOrganizationRepository.save(userOrganization)
+    }
+
+
+    override fun getAllByOrganizationId(organizationId: Long): List<UserDto>? {
+        return usersOrganizationRepository.findUsersByOrganizationId(organizationId)?.map { userMapper.toDto(it) }
+    }
+
+    override fun getCountContracts(request: ContractCountRequest): ContractCountResponse {
+        request.organizationId.let {organizationRepository.findByIdAndDeletedFalse(request.organizationId)
+                ?: throw  OrganizationNotFoundException()}
+        val count: Int = if (request.operatorId == null && request.date == null) {
+            contractRepository.getCountContracts(request.organizationId)
+        }else if (request.date != null && request.operatorId == null) {
+            contractRepository.getCountContracts(request.organizationId, request.date)
+        }else if(request.date == null && request.operatorId != null) {
+            contractRepository.getCountContracts(request.organizationId, request.operatorId)
+        }else{
+            contractRepository.getCountContracts(request.organizationId, request.operatorId!!, request.date!!)
+        }
+        return ContractCountResponse(
+            organizationId = request.organizationId,
+            countContract = count
+        )
     }
 
     override fun existsUserData(passportId: String, phoneNumber: String) {
         if (userRepository.existsByPassportId(passportId))
-            throw UserAlreadyExistsException()
+            throw PassportIdAlreadyUsedException()
         if(userRepository.existsByPhoneNumber(phoneNumber))
             throw UserAlreadyExistsException()
     }
 
-    override fun dismissal(operatorId: Long, organizationId: Long) {
-        operatorId.let {
-            userRepository.findByIdAndDeletedFalse(it)?: throw  UserNotFoundException()
+    override fun existsUserCurrentOrganization(passportId: String) {
+        passportId.let {
+            if (usersOrganizationRepository.existsByUserIdIsCurrent(it))
+                 throw OperatorAlreadyCurrentException()
         }
-        organizationId.let {
-            organizationRepository.findByIdAndDeletedFalse(it)?: throw OrganizationNotFoundException()
-        }
-        val usersOrganization = usersOrganizationRepository.findByOrganizationIdAndUserId(organizationId, operatorId)?: throw UserNotFoundException()
-        usersOrganization.isCurrentUser = false
-        usersOrganization.leftDate = Date(System.currentTimeMillis())
-        usersOrganizationRepository.save(usersOrganization)
-    }
-
-    override fun getAllByOrganizationId(organizationId: Long): List<UserDto>? {
-        return usersOrganizationRepository.findUsersByOrganizationId(organizationId)?.map { userMapper.toDto(it) }
     }
 }
 
@@ -605,7 +728,8 @@ class UserServiceImpl(
 class OrganizationServiceImpl(
     private val organizationRepository: OrganizationRepository,
     private val userRepository: UserRepository,
-    private val usersOrganizationRepository: UsersOrganizationRepository
+    private val usersOrganizationRepository: UsersOrganizationRepository,
+    private val organizationMapper: OrganizationMapper
 ): OrganizationService {
 
     @Transactional
@@ -626,12 +750,25 @@ class OrganizationServiceImpl(
     }
 
     override fun update(request: UpdateOrganizationRequest, id: Long) {
+        val organization =  organizationRepository.findByIdAndDeletedFalse(id) ?: throw  OrganizationNotFoundException()
+        request.name?.takeIf {organizationRepository.existsByNameAndId(id, it)}
+            ?.let { throw OrganizationAlreadyExistsException()}
+        organizationRepository.save(organizationMapper.fromUpdateDto(request, organization))
     }
 
     override fun existsByName(name: String) {
         name.let {
             if(organizationRepository.existsByName(name))
                 throw OrganizationAlreadyExistsException()
+        }
+    }
+
+    override fun getAll(directorId: Long): List<OrganizationDto> {
+        directorId.let {
+            userRepository.findByIdAndDeletedFalse(directorId)?: throw  UserNotFoundException()
+        }
+        return usersOrganizationRepository.findAllOrganizationByUserId(directorId).map {
+            organizationMapper.toDto(it)
         }
     }
 }
@@ -685,10 +822,9 @@ class AuthServiceImpl(
 class AttachmentServiceImpl(
     private  val repository: AttachmentRepository,
     private val attachmentMapper: AttachmentMapper,
+    private val jobRepository: JobRepository
     ) : AttachmentService {
-    @Value("\${file.path}")
-    lateinit var filePath: String
-  
+
     override fun upload(multipartFile: MultipartFile , subFolder : String?): AttachmentInfo {
         val entity = attachmentMapper.toEntity(multipartFile, subFolder)
         val file = File(entity.path).apply {
@@ -704,19 +840,30 @@ class AttachmentServiceImpl(
 
 
     @Throws(IOException::class)
-    override fun download(id: Long): ResponseEntity<*> {
-        val fileEntity = repository.findByIdAndDeletedFalse(id)?:throw AttachmentNotFound()
-
+    override fun download(hashId: String): ResponseEntity<*> {
+        val fileEntity = repository.findByHashIdAndDeletedFalse(hashId)?:throw AttachmentNotFound()
+        val operator = getCurrentUserId()
+        jobRepository.findAllByAttachmentAndDeletedFalse(fileEntity)?.let {
+            if (operator?.id != it.createdBy) {
+                throw PermissionDenied()
+            }
+        }
         return fileEntity.run{
             val inputStream = FileInputStream(path)
             val resource = InputStreamResource(inputStream)
 
             ResponseEntity.ok()
-                .header("Content-Disposition", "attachment; filename=\"${name}\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"${name}\"")
                 .contentType(MediaType.parseMediaType(contentType))
                 .body(resource)
         }
+//        val resource = InputStreamResource(FileInputStream(fileEntity.path))
+//        return ResponseEntity.ok()
+//            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"${fileEntity.name}\"")
+//            .contentType(MediaType.APPLICATION_OCTET_STREAM)
+//            .body(resource)
     }
+
     @Throws(IOException::class)
     override fun preview(id: Long): ResponseEntity<*> {
         val fileEntity = repository.findByIdAndDeletedFalse(id)?:throw AttachmentNotFound()

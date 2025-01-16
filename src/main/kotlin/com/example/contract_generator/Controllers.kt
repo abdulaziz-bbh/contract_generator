@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.*
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.multipart.MultipartFile
 import jakarta.validation.Valid
+import jakarta.websocket.server.PathParam
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -60,6 +61,21 @@ class KeyController(val service: KeyService) {
     @DeleteMapping("{id}")
     fun delete(@PathVariable id: Long) = service.delete(id)
 }
+@RestController
+@RequestMapping("api/job")
+class JobController(private val jobService: JobService) {
+
+    @PostMapping
+    fun generateContract(@RequestBody dto: GenerateContractDto): JobDto {
+        return jobService.generateContract(dto)
+    }
+    @PostMapping("/status")
+    fun generateContract(@RequestBody jobIds: List<JobIdsDto>): List<JobDto> {
+        return jobService.getStatus(jobIds)
+    }
+    @GetMapping
+    fun getJobs()=jobService.getAll()
+}
 
 @RestController
 @RequestMapping("api/contracts")
@@ -78,7 +94,7 @@ class ContractController(
 
     @PutMapping
     fun updateContract(
-        @RequestBody list: List<ContractRequestDto>
+        @RequestBody list: List<ContractDataUpdateDto>
     ): ResponseEntity<Void> {
         contractService.updateContract(list)
         return ResponseEntity.ok().build()
@@ -86,7 +102,7 @@ class ContractController(
 
     @DeleteMapping
     fun deleteContracts(
-        @RequestParam contractIds: List<Long>
+        @RequestBody contractIds: List<ContractIdsDto>
     ): ResponseEntity<Void> {
         contractService.delete(contractIds)
         return ResponseEntity.ok().build()
@@ -99,7 +115,6 @@ class ContractController(
         val response = contractService.getAll(isGenerated)
         return ResponseEntity.ok(response)
     }
-
     @GetMapping("/{contractId}")
     fun findContractById(
         @PathVariable contractId: Long
@@ -158,9 +173,9 @@ class AttachmentController(private val service: AttachmentService) {
     }
 
 
-    @GetMapping("/download/{id}")
-    fun downloadFile(@PathVariable id: Long): ResponseEntity<*> {
-        return service.download(id)
+    @GetMapping("/download/{hashId}")
+    fun downloadFile(@PathVariable("hashId") hashId: String): ResponseEntity<*> {
+        return service.download(hashId)
     }
 
 
@@ -193,12 +208,6 @@ class AuthController(
     fun signIn(@RequestBody @Valid request: LoginRequest): AuthenticationDto {
         return authService.login(request)
     }
-
-
-//        @PostMapping("/refresh-token")
-//        fun refreshToken(request: HttpServletRequest, response: HttpServletResponse) {
-//            return authService.refreshToken(request, response)
-//        }
 }
 
 @RestController
@@ -207,23 +216,36 @@ class UserController(
     private val userService: UserService
 ) {
 
-        @PostMapping
-        fun create(@RequestBody @Valid request: CreateOperatorRequest) {
-            return userService.createOperator(request)
-        }
-        @PutMapping("/{id}")
-        fun update(@RequestBody @Valid request: UpdateOperatorRequest, @PathVariable("id") id: Long) {
-            return userService.updateOperator(request, id)
-        }
+    @PostMapping
+    fun create(@RequestBody @Valid request: CreateOperatorRequest) {
+        return userService.createOperator(request)
+    }
+    @PutMapping("/{id}")
+    fun update(@RequestBody @Valid request: UpdateOperatorRequest, @PathVariable("id") id: Long) {
+        return userService.updateOperator(request, id)
+    }
 
-        @PutMapping("dismissal/{operator-id}/{organization-id}")
-        fun dismissal(@PathVariable("operator-id") operatorId: Long, @PathVariable("organization-id") organizationId: Long) {
-            return userService.dismissal(operatorId, organizationId)
-        }
-        @GetMapping("get-all/{organization-id}")
-        fun getOrganizations(@PathVariable("organization-id") organizationId: Long): List<UserDto>? {
-            return userService.getAllByOrganizationId(organizationId)
-        }
+    @PostMapping("dismissal")
+    fun dismissal(
+        @PathParam("operatorId") operatorId: Long,
+        @PathParam("organizationId") organizationId: Long) {
+        return userService.dismissal(operatorId, organizationId)
+    }
+
+    @PostMapping("recruitment")
+    fun recruitment(
+        @PathParam("organizationId") organizationId: Long,
+        @PathParam("passportId") passportId: String) {
+        return userService.recruitment(organizationId, passportId)
+    }
+    @GetMapping("get-all/{organization-id}")
+    fun getOrganizations(@PathVariable("organization-id") organizationId: Long): List<UserDto>? {
+        return userService.getAllByOrganizationId(organizationId)
+    }
+    @GetMapping("get-count-contracts")
+    fun getCountContracts(@RequestBody request: ContractCountRequest): ContractCountResponse {
+        return userService.getCountContracts(request)
+    }
 }
 
 @RestController
@@ -233,9 +255,15 @@ class OrganizationController(
 ) {
 
     @PostMapping
-    fun create(@RequestBody @Valid request: CreateOrganizationRequest) {
-        organizationService.create(request)
-      
-    }
+    fun create(@RequestBody @Valid request: CreateOrganizationRequest) = organizationService.create(request)
+
+    @PutMapping
+    fun update(@RequestBody @Valid request: UpdateOrganizationRequest,
+               @PathParam("id") id: Long)  = organizationService.update(request, id)
+
+
+    @GetMapping("/{director-id}")
+    fun getAll(@PathVariable("director-id") id: Long): List<OrganizationDto> = organizationService.getAll(id)
+
 }
 

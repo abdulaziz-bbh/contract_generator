@@ -2,6 +2,7 @@ package com.example.contract_generator
 
 import jakarta.persistence.EntityManager
 import jakarta.transaction.Transactional
+import org.springframework.data.annotation.CreatedBy
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.domain.Specification
@@ -14,6 +15,8 @@ import org.springframework.data.repository.NoRepositoryBean
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
+import java.time.LocalDate
+import java.util.Date
 
 
 @NoRepositoryBean
@@ -77,8 +80,60 @@ interface KeyRepository : BaseRepository<Key> {
 
 
 interface ContractRepository : BaseRepository<Contract> {
-    fun findByFile_Name(fileName: String): Contract?
-    fun findByIsGeneratedAndDeletedFalse(isGenerated: Boolean): List<Contract>
+    fun findAllByIdInAndDeletedFalse(ids: Collection<Long>): List<Contract>
+    @Query("SELECT c FROM Contract c JOIN c.operators o WHERE o = :operator AND c.isGenerated = :isGenerated AND c.deleted = false")
+    fun findByOperatorAndIsGeneratedAndDeletedFalse(
+        @Param("operator") operator: User,
+        @Param("isGenerated") isGenerated: Boolean
+    ): List<Contract>
+
+    @Query("SELECT c FROM Contract c JOIN c.operators o WHERE o = :operator AND c.deleted = false")
+    fun getAllByOperatorAndDeletedFalse(
+        @Param("operator") operator: User
+    ): List<Contract>
+    @Query(
+        """
+    SELECT COUNT(c) = :contractIdsCount
+    FROM Contract c 
+    JOIN c.operators o 
+    WHERE c.id IN :contractIds 
+      AND o = :operator 
+      AND c.deleted = false
+    """
+    )
+    fun existsAllByOperatorsAndDeletedFalse(
+        @Param("contractIds") contractIds: List<Long>,
+        @Param("operator") operator: User,
+        @Param("contractIdsCount") contractIdsCount: Long
+    ): Boolean
+
+
+    @Query("""
+        select count(*) from Contract c where c.template.organization.id = :organizationId 
+        and c.createdBy = :operatorId 
+        and extract(date from c.createdAt )= :date 
+    """)
+    fun getCountContracts(organizationId: Long, operatorId: Long, date: LocalDate): Int
+
+    @Query("""
+        select count(*) from Contract c where c.template.organization.id = :organizationId
+        and extract(date from c.createdAt )= :date 
+    """)
+    fun getCountContracts(organizationId: Long, date: LocalDate): Int
+
+    @Query("""
+        select count(*) from Contract c where c.template.organization.id = :organizationId 
+        and c.createdBy = :operatorId 
+    """)
+    fun getCountContracts(organizationId: Long, operatorId: Long): Int
+
+
+    @Query("""
+        select count(*) from Contract c where c.template.organization.id = :organizationId 
+    """)
+    fun getCountContracts(organizationId: Long): Int
+
+
 }
 
 @Repository
@@ -106,18 +161,32 @@ interface UserRepository : BaseRepository<User>{
     """)
     fun findByPhoneNumber(phoneNumber: String, id: Long): User?
 
+
+    fun findByPassportId(passportId: String): User?
+
     @Query("""
         select u from users u where u.id != :id and u.passportId = :passportId
     """)
-    fun findByPassportId(passportId: String, id: Long): User?
+    fun existsUserIdAndPassportId(passportId: String, id: Long): User?
 
 }
 
 interface OrganizationRepository : BaseRepository<Organization>{
     fun existsByName(name: String): Boolean
+
+    @Query("""
+        select exists(select o from Organization o where o.name = :name and o.id != :organizationId)
+    """)
+    fun existsByNameAndId(organizationId: Long, name: String): Boolean
 }
 
 interface UsersOrganizationRepository : BaseRepository<UsersOrganization>{
+
+    @Query("""
+        select o from Organization o join UsersOrganization uo on o.id = uo.organization.id
+        join users  u on uo.user.id = u.id where  uo.user.id = :userId order by o.createdAt desc 
+    """)
+    fun findAllOrganizationByUserId(userId: Long): List<Organization>
 
     @Query("""
         select u from users u 
@@ -134,14 +203,32 @@ interface UsersOrganizationRepository : BaseRepository<UsersOrganization>{
             and uo.isCurrentUser != false 
     """)
     fun findByOrganizationIdAndUserId(organizationId: Long, userId: Long): UsersOrganization?
+
+    @Query("""
+        select u from UsersOrganization u
+            where u.user.id = :userId 
+                and u.deleted = false
+                and u.isCurrentUser = true order by u.createdAt desc
+    """)
+    fun findByUserIdAndDeletedFalse(userId: Long): UsersOrganization?
+
+    @Query("""
+        select exists(select u from UsersOrganization u where u.user.passportId = :passportId and u.isCurrentUser = true order by u.createdAt desc)
+    """)
+    fun existsByUserIdIsCurrent(passportId: String): Boolean
 }
 
 interface AttachmentRepository : BaseRepository<Attachment> {
-
-    fun findByName(name: String): Attachment?
+    fun findByHashIdAndDeletedFalse(hashId: String): Attachment?
 }
 
 interface ContractDataRepository : BaseRepository<ContractData>{
     fun findAllByContract(contract: Contract): List<ContractData>
     fun findAllByIdInAndDeletedFalse(ids: Collection<Long>): List<ContractData>
+}
+@Repository
+interface JobRepository : BaseRepository<Job>{
+    fun findAllByAttachmentAndDeletedFalse(attachment: Attachment): Job?
+    fun findAllByIdInAndCreatedByAndDeletedFalse(ids: Collection<Long>,createdBy: Long): List<Job>
+    fun findAllByCreatedByAndDeletedFalse(createdBy: Long): List<Job>
 }
