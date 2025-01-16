@@ -4,7 +4,6 @@ import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Positive
 import java.time.LocalDate
-import java.util.Date
 
 
 data class BaseMessage(val code: Int, val message: String?)
@@ -65,18 +64,18 @@ data class AttachmentResponse(
 
 
 data class CreateDirectorRequest(
-    @field:NotNull val fullName: String,
-    @field:NotNull val password: String,
-    @field:NotNull val phoneNumber: String,
-    @field:NotNull val passportId: String
+    val fullName: String,
+    val password: String,
+    val phoneNumber: String,
+    val passportId: String
 )
 
 data class CreateOperatorRequest(
-    @field:NotNull val fullName: String,
-    @field:NotNull val password: String,
-    @field:NotNull val phoneNumber: String,
-    @field:NotNull val passportId: String,
-    @field:NotNull val organizationId: Long
+    val fullName: String,
+    val password: String,
+    val phoneNumber: String,
+    val passportId: String,
+    val organizationId: Long
 )
 data class UpdateOperatorRequest(
     val fullName: String?,
@@ -93,8 +92,8 @@ data class UserDto(
 )
 
 data class LoginRequest(
-    @field:NotNull val username: String,
-    @field:NotNull val password: String,
+    val username: String,
+    val password: String,
 )
 
 data class AuthenticationDto(
@@ -103,8 +102,8 @@ data class AuthenticationDto(
 )
 
 data class CreateOrganizationRequest(
-    @field:NotNull val name: String,
-    @field:NotNull val address: String,
+    val name: String,
+    val address: String,
 )
 data class UpdateOrganizationRequest(
     val name: String?,

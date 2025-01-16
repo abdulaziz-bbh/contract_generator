@@ -41,7 +41,6 @@ interface UserService{
 interface AuthService{
     fun registration(request: CreateDirectorRequest)
     fun login(request: LoginRequest) : AuthenticationDto
-//    fun refreshToken(request: HttpServletRequest, response: HttpServletResponse)
 }
 interface OrganizationService{
     fun create(request: CreateOrganizationRequest)
@@ -651,36 +650,24 @@ class UserServiceImpl(
     }
 
     override fun updateOperator(request: UpdateOperatorRequest, id: Long) {
-     val user =  id.let {
-            userRepository.findByIdAndDeletedFalse(it)?: throw  UserNotFoundException()
-        }
-        request.passportId.let {
-            if (it != null) {
-                if (userRepository.existsUserIdAndPassportId(it, id) != null) {
-                    throw PassportIdAlreadyUsedException()
-                }
-            }
-        }
-        request.phoneNumber.let {
-            if (it != null) {
-                if (userRepository.findByPhoneNumber(it, id) != null) {
-                    throw UserAlreadyExistsException()
-                }
-            }
-        }
+     val user =  id.let { userRepository.findByIdAndDeletedFalse(it)
+            ?: throw  UserNotFoundException() }
+        request.passportId?.let { userRepository.existsUserIdAndPassportId(it, id)
+            ?:throw PassportIdAlreadyUsedException() }
+        request.phoneNumber?.let {(userRepository.findByPhoneNumber(it, id))
+            ?:throw UserAlreadyExistsException() }
         userRepository.save(userMapper.fromUpdateDto(request, user ))
     }
 
     override fun dismissal(operatorId: Long, organizationId: Long) {
-        operatorId.let {
-            userRepository.findByIdAndDeletedFalse(it)?: throw  UserNotFoundException()
-        }
-        organizationId.let {
-            organizationRepository.findByIdAndDeletedFalse(it)?: throw OrganizationNotFoundException()
-        }
+        operatorId.let {userRepository.findByIdAndDeletedFalse(it)
+            ?:throw  UserNotFoundException()}
+        organizationId.let {organizationRepository.findByIdAndDeletedFalse(it)
+            ?: throw OrganizationNotFoundException()}
+
         val usersOrganization = usersOrganizationRepository.findByOrganizationIdAndUserId(organizationId, operatorId)?: throw UserNotFoundException()
         usersOrganization.isCurrentUser = false
-        usersOrganization.leftDate = Date(System.currentTimeMillis())
+        usersOrganization.leftDate = Date()
         usersOrganizationRepository.save(usersOrganization)
     }
 
@@ -705,10 +692,8 @@ class UserServiceImpl(
     }
 
     override fun getCountContracts(request: ContractCountRequest): ContractCountResponse {
-        request.organizationId.let {
-            organizationRepository.findByIdAndDeletedFalse(request.organizationId)
-                ?: throw  OrganizationNotFoundException()
-        }
+        request.organizationId.let {organizationRepository.findByIdAndDeletedFalse(request.organizationId)
+                ?: throw  OrganizationNotFoundException()}
         val count: Int = if (request.operatorId == null && request.date == null) {
             contractRepository.getCountContracts(request.organizationId)
         }else if (request.date != null && request.operatorId == null) {
@@ -765,6 +750,10 @@ class OrganizationServiceImpl(
     }
 
     override fun update(request: UpdateOrganizationRequest, id: Long) {
+        val organization =  organizationRepository.findByIdAndDeletedFalse(id) ?: throw  OrganizationNotFoundException()
+        request.name?.takeIf {organizationRepository.existsByNameAndId(id, it)}
+            ?.let { throw OrganizationAlreadyExistsException()}
+        organizationRepository.save(organizationMapper.fromUpdateDto(request, organization))
     }
 
     override fun existsByName(name: String) {

@@ -18,6 +18,13 @@ class OrganizationMapper{
             address = organization.address,
         )
     }
+    fun fromUpdateDto(request: UpdateOrganizationRequest, organization: Organization): Organization {
+        request.run {
+            name?.let { organization.name = it }
+            address?.let { organization.address = it }
+            return organization
+        }
+    }
 }
 @Component
 class KeyMapper {
@@ -206,9 +213,9 @@ class UserMapper(
     }
     fun fromUpdateDto(request: UpdateOperatorRequest, user: User):User{
         request.run {
-            if (fullName != null) user.fullName = fullName
-            if (phoneNumber != null) user.phoneNumber = phoneNumber
-            if (passportId != null) user.passportId = passportId
+            fullName?.let { user.fullName = it }
+            phoneNumber?.let { user.phoneNumber = it }
+            passportId?.let { user.passportId = it }
         }
         return user
     }

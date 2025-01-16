@@ -262,13 +262,15 @@ class OrganizationController(
 ) {
 
     @PostMapping
-    fun create(@RequestBody @Valid request: CreateOrganizationRequest) {
-        organizationService.create(request)
-    }
+    fun create(@RequestBody @Valid request: CreateOrganizationRequest) = organizationService.create(request)
+
+    @PutMapping
+    fun update(@RequestBody @Valid request: UpdateOrganizationRequest,
+               @PathParam("id") id: Long)  = organizationService.update(request, id)
+
 
     @GetMapping("/{director-id}")
-    fun getAll(@PathVariable("director-id") id: Long): List<OrganizationDto> {
-        return organizationService.getAll(id)
-    }
+    fun getAll(@PathVariable("director-id") id: Long): List<OrganizationDto> = organizationService.getAll(id)
+
 }
 
