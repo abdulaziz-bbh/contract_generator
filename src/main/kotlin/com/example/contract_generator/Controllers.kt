@@ -67,15 +67,10 @@ class KeyController(val service: KeyService) {
 @RestController
 @RequestMapping("api/job")
 class JobController(private val jobService: JobService) {
-
     @PostMapping
-    fun generateContract(@RequestBody dto: GenerateContractDto): JobDto {
-        return jobService.generateContract(dto)
-    }
+    fun generateContract(@RequestBody @Valid dto: GenerateContractDto)=jobService.generateContract(dto)
     @PostMapping("/status")
-    fun generateContract(@RequestBody jobIds: List<JobIdsDto>): List<JobDto> {
-        return jobService.getStatus(jobIds)
-    }
+    fun generateContract(@RequestBody @Valid jobIds: List<JobIdsDto>)=jobService.getStatus(jobIds)
     @GetMapping
     fun getJobs()=jobService.getAll()
 }
@@ -85,48 +80,17 @@ class JobController(private val jobService: JobService) {
 class ContractController(
     private val contractService: ContractService
 ) {
-
     @PostMapping("/{templateId}")
-    fun createContract(
-        @PathVariable templateId: Long,
-        @RequestBody list: List<ContractRequestDto>
-    ): ResponseEntity<List<ContractResponseDto>> {
-        val response = contractService.createContract(templateId, list)
-        return ResponseEntity.ok(response)
-    }
-
+    fun createContract(@PathVariable templateId: Long, @RequestBody @Valid list: List<ContractRequestDto>)= contractService.createContract(templateId, list)
     @PutMapping
-    fun updateContract(
-        @RequestBody list: List<ContractDataUpdateDto>
-    ): ResponseEntity<Void> {
-        contractService.updateContract(list)
-        return ResponseEntity.ok().build()
-    }
-
+    fun updateContract(@RequestBody @Valid list: List<ContractDataUpdateDto>)=contractService.updateContract(list)
     @DeleteMapping
-    fun deleteContracts(
-        @RequestBody contractIds: List<ContractIdsDto>
-    ): ResponseEntity<Void> {
-        contractService.delete(contractIds)
-        return ResponseEntity.ok().build()
-    }
-
+    fun deleteContracts(@RequestBody @Valid contractIds: List<ContractIdsDto>)=contractService.delete(contractIds)
     @GetMapping
-    fun getAllContracts(
-        @RequestParam(required = false) isGenerated: Boolean?
-    ): ResponseEntity<List<ContractResponseDto>> {
-        val response = contractService.getAll(isGenerated)
-        return ResponseEntity.ok(response)
-    }
+    fun getAllContracts(@RequestParam(required = false) isGenerated: Boolean?)= contractService.getAll(isGenerated)
     @GetMapping("/{contractId}")
-    fun findContractById(
-        @PathVariable contractId: Long
-    ): ResponseEntity<ContractResponseDto> {
-        val response = contractService.findById(contractId)
-        return ResponseEntity.ok(response)
-    }
-
-}
+    fun findContractById(@PathVariable contractId: Long) = contractService.findById(contractId)
+ }
 
 @RestController
 @RequestMapping("/api/v1/templates")

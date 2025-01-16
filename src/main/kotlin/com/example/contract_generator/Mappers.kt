@@ -114,29 +114,19 @@ class TemplateMapper(
 }
 @Component
 class AttachmentMapper {
-
         @Value("\${file.path}")
         lateinit var filePath: String
 
-        fun createDirectoryPath(
-            date: LocalDate = LocalDate.now(),
-            subFolder: String? = null,
-            contentType: String? = null
-        ): Triple<File, UUID, String> {
+        fun createDirectoryPath(date: LocalDate = LocalDate.now(), subFolder: String? = null, contentType: String? = null): Triple<File, UUID, String> {
             val uuid = UUID.randomUUID()
             val baseDir = "$filePath/${date.year}/${date.monthValue}/${date.dayOfMonth}"
-
             val fullPath = when {
                 subFolder != null -> "$baseDir/$subFolder"
                 contentType != null -> "$baseDir/${contentType.split("/")[0]}"
                 else -> baseDir
             }
-
             val directory = File(fullPath)
-            if (!directory.exists()) {
-                directory.mkdirs()
-            }
-
+            if (!directory.exists()) directory.mkdirs()
             return Triple(directory, uuid, fullPath)
         }
 
@@ -147,28 +137,12 @@ class AttachmentMapper {
 
             val (_, uuid, path) = if (subFolder != null) {
                 createDirectoryPath(subFolder = subFolder, contentType = contentType)
-            } else {
-                createDirectoryPath(contentType = contentType)
-            }
-            return Attachment(
-                name = uuid.toString(),
-                contentType = contentType,
-                size = multipartFile.size,
-                extension = extension,
-                path = "$path/$uuid.$extension"
-            )
+            } else { createDirectoryPath(contentType = contentType) }
+            return Attachment(uuid.toString(),contentType,multipartFile.size,extension, "$path/$uuid.$extension")
         }
         fun toInfo(attachment: Attachment): AttachmentInfo {
-            return attachment.run { AttachmentInfo(
-                id = id!!,
-                name = name,
-                contentType = contentType,
-                size = size,
-                extension = extension,
-                path = path)
-            }
+            return attachment.run { AttachmentInfo(id!!, name, contentType, size, extension, path) }
         }
-
 }
 
 @Component
@@ -218,29 +192,13 @@ class UserMapper(
 class ContractMapper(private val userMapper: UserMapper,
     private val keyMapper: KeyMapper) {
     fun toDto(contract: Contract, contractDataList: List<ContractData>): ContractResponseDto {
-        return ContractResponseDto(
-            id = contract.id!!,
-            templateName = contract.template.templateName,
-            operators = contract.operators.map { userMapper.toDto(it) },
-            contractData = contractDataList.map {
-                ContractDataDto(
-                    id = it.id !!,
-                    key = it.key.key.removeSurrounding("$"),
-                    value = it.value
-                )
-            },
-            isGenerated = contract.isGenerated
-        )
+        return ContractResponseDto(contract.id!!,contract.template.templateName, contract.operators.map { userMapper.toDto(it) },
+            contractDataList.map { ContractDataDto(it.id !!, it.key.key.removeSurrounding("$"), it.value) }, contract.isGenerated)
     }
 }
 @Component
 class JobMapper {
     fun toDto(job: Job,hashId:String? = null): JobDto {
-        return JobDto(
-            id = job.id!!,
-            extension = job.extension,
-            status = job.status,
-            hashId = hashId
-        )
+        return JobDto(job.id!!, job.extension, job.status, hashId)
     }
 }

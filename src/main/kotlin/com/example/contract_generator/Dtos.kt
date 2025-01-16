@@ -1,6 +1,7 @@
 package com.example.contract_generator
 
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.NotEmpty
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Positive
 import java.time.LocalDate
@@ -147,15 +148,15 @@ data class ContractDataUpdateDto(
     @field:NotNull @field: NotBlank val value: String
 )
 data class ContractIdsDto(
-    @field:NotNull @field: Positive val contractId: Long
+    @field:NotNull @field: NotEmpty val contractIds: List<Long>?
 )
 data class JobIdsDto(
-    @field:NotNull @field: Positive val jobId: Long
+    @field:NotNull @field:NotEmpty val jobIds: List<Long>?
 )
 
 data class GenerateContractDto(
     @field:NotNull val extension:JobType,
-    @field:NotNull @field:NotBlank val list:List<ContractIdsDto>
+    @field:NotNull @field:NotBlank val list:ContractIdsDto
 )
 data class JobDto(
     val id: Long,

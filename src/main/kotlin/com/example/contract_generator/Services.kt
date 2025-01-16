@@ -80,7 +80,7 @@ interface AttachmentService {
 interface ContractService{
     fun createContract(templateId: Long, list: List<ContractRequestDto>): List<ContractResponseDto>
     fun updateContract(list: List<ContractDataUpdateDto>)
-    fun delete(contractIds: List<ContractIdsDto>)
+    fun delete(contractIds: ContractIdsDto)
     fun getAll(isGenerated:Boolean?): List<ContractResponseDto>
     fun findById(contractId: Long):ContractResponseDto
     fun generateZip(job: Job)
@@ -88,7 +88,7 @@ interface ContractService{
 }
 interface JobService{
     fun generateContract(dto: GenerateContractDto): JobDto
-    fun getStatus(jobIds: List<JobIdsDto>): List<JobDto>
+    fun getStatus(jobIds: JobIdsDto): List<JobDto>
     fun getAll():List<JobDto>
 }
 @Service
@@ -100,32 +100,19 @@ class JobServiceImpl(
 ): JobService {
     @Transactional
     override fun generateContract(dto: GenerateContractDto): JobDto {
-        val ids = contractService.checkDistinct(dto.list.map { it.contractId },DuplicateContract())
-        if (!contractRepository.existsAllByOperatorsAndDeletedFalse(
-                ids,
-                getCurrentUserId()!!,
-                ids.size.toLong()
-            )
-        ) {
-            throw PermissionDenied()
-        }
+        val ids = contractService.checkDistinct(dto.list.contractIds!!,DuplicateContract())
+        if (!contractRepository.existsAllByOperatorsAndDeletedFalse(ids, getCurrentUserId()!!, ids.size.toLong())) throw PermissionDenied()
         val contracts = contractRepository.findAllByIdInAndDeletedFalse(ids)
-        if (contracts.size != ids.size) {
-            throw ContractNotFound()
-        }
-
+        if (contracts.size != ids.size) throw ContractNotFound()
         val job = Job(extension = dto.extension)
         job.contracts.addAll(contracts)
-
         contractService.generateZip(jobRepository.save(job))
         return jobMapper.toDto(job)
     }
 
-    override fun getStatus(jobIds: List<JobIdsDto>): List<JobDto> {
-        val jobs = jobRepository.findAllByIdInAndCreatedByAndDeletedFalse(jobIds.map { it.jobId }, getCurrentUserId()?.id!!)
-        if (jobs.size != jobIds.size) {
-            throw JobNotFound()
-        }
+    override fun getStatus(jobIds: JobIdsDto): List<JobDto> {
+        val jobs = jobRepository.findAllByIdInAndCreatedByAndDeletedFalse(jobIds.jobIds!!, getCurrentUserId()?.id!!)
+        if (jobs.size != jobIds.jobIds.size) throw JobNotFound()
         return jobs.map {
             job-> jobMapper.toDto(job,job.attachment?.hashId)
         }
@@ -153,83 +140,51 @@ class ContractServiceImpl(
     override fun createContract(templateId: Long, list: List<ContractRequestDto>): List<ContractResponseDto> {
         val template: Template = templateRepository.findByIdAndDeletedFalse(templateId)
             ?: throw TemplateNotFoundException()
-        if(template.organization != getCurrentOrganization(usersOrganizationRepository))(
-                throw TemplateNotFoundException()
-        )
+        if(template.organization != getCurrentOrganization(usersOrganizationRepository)) throw TemplateNotFoundException()
         val currentUser = getCurrentUserId()?:throw UserNotFoundException()
-
-        if (list.size != list.distinctBy { it.contractData }.size) {
-            throw DuplicateContract()
-        }
+        if (list.size != list.distinctBy { it.contractData }.size) throw DuplicateContract()
         val requiredKeyIds = template.keys.map { it.id }.toSet()
-
-        val responseDtos = mutableListOf<ContractResponseDto>()
-
+        val responseDto = mutableListOf<ContractResponseDto>()
         list.forEach { contractRequestDto ->
             val keyIds = checkDistinct(contractRequestDto.contractData.map { it.keyId },DuplicateKey())
-
-            if (!requiredKeyIds.all { it in keyIds }) {
-                throw MissingTemplateKeys()
-            }
+            if (!requiredKeyIds.all { it in keyIds })  throw MissingTemplateKeys()
             val keys = keyRepository.findAllByIdInAndDeletedFalse(keyIds)
-
             val unresolvedKeyIds = keyIds - keys.map { it.id }.toSet()
-            if (unresolvedKeyIds.isNotEmpty()) {
-                throw KeyNotFoundException()
-            }
-
-            val contract = Contract(template = template).apply {
-                operators.add(currentUser)
-            }
+            if (unresolvedKeyIds.isNotEmpty())  throw KeyNotFoundException()
+            val contract = Contract(template = template).apply { operators.add(currentUser)}
             contractRepository.save(contract)
-
             val contractDataList = contractRequestDto.contractData.map { contractData ->
-                val key = keys.find { it.id == contractData.keyId }
-                    ?: throw KeyNotFoundException()
-                ContractData(
-                    key = key,
-                    value = contractData.value,
-                    contract = contract
-                )
+                val key = keys.find { it.id == contractData.keyId } ?: throw KeyNotFoundException()
+                ContractData(key, contractData.value, contract)
             }
             contractDataRepository.saveAll(contractDataList)
-            responseDtos.add(contractMapper.toDto(contract, contractDataList))
+            responseDto.add(contractMapper.toDto(contract, contractDataList))
         }
-
-        return responseDtos
+        return responseDto
     }
 
     @Transactional
     override fun updateContract(list: List<ContractDataUpdateDto>) {
         val keyIds = checkDistinct(list.map { it.contractDataId},DuplicateKey())
         val existingContractData = contractDataRepository.findAllByIdInAndDeletedFalse(keyIds)
-        if (existingContractData.size != list.size) {
-            throw ContractDataNotFound()
-        }
+        if (existingContractData.size != list.size) throw ContractDataNotFound()
         val user = getCurrentUserId()
         existingContractData.forEach { contractData ->
             val newValue = list.get(keyIds.indexOf(contractData.id)).value
             contractData.value = newValue
             contractData.contract.isGenerated = false
             contractRepository.save(contractData.contract)
-            if (!contractData.contract.operators.contains(user)) {
-                throw PermissionDenied()
-            }
+            if (!contractData.contract.operators.contains(user)) throw PermissionDenied()
         }
         contractDataRepository.saveAll(existingContractData)
     }
 
-
     @Transactional
-    override fun delete(contractIds: List<ContractIdsDto>) {
-        val ids = checkDistinct(contractIds.map { it.contractId },DuplicateContract())
-        if (!contractRepository.existsAllByOperatorsAndDeletedFalse(ids, getCurrentUserId()!!,contractIds.size.toLong())){
-            throw PermissionDenied()
-        }
+    override fun delete(contractIds: ContractIdsDto) {
+        val ids = checkDistinct(contractIds.contractIds!!,DuplicateContract())
+        if (!contractRepository.existsAllByOperatorsAndDeletedFalse(ids, getCurrentUserId()!!,contractIds.contractIds.size.toLong())) throw PermissionDenied()
         val trashedContracts = contractRepository.trashList(ids)
-        if (trashedContracts.any { it == null }) {
-            throw ContractNotFound()
-        }
+        if (trashedContracts.any { it == null }) throw ContractNotFound()
         trashedContracts.filterNotNull().forEach { contract ->
             val contractDataIds = contractDataRepository.findAllByContract(contract).mapNotNull { it.id }
             contractDataRepository.trashList(contractDataIds)
@@ -238,11 +193,9 @@ class ContractServiceImpl(
 
     override fun getAll(isGenerated: Boolean?): List<ContractResponseDto> {
         val user= getCurrentUserId()!!
-        val contracts = if (isGenerated != null) {
+        val contracts = isGenerated?.let {
             contractRepository.findByOperatorAndIsGeneratedAndDeletedFalse(user,isGenerated)
-        } else {
-            contractRepository.getAllByOperatorAndDeletedFalse(user)
-        }
+        }?: contractRepository.getAllByOperatorAndDeletedFalse(user)
         return contracts.map { contract ->
             contractMapper.toDto(contract, contractDataRepository.findAllByContract(contract))
         }
@@ -250,12 +203,8 @@ class ContractServiceImpl(
 
 
     override fun findById(contractId: Long): ContractResponseDto {
-        val contract = contractRepository.findByIdAndDeletedFalse(contractId)
-            ?: throw ContractNotFound()
-
-        if (!contract.operators.contains(getCurrentUserId()!!)) {
-            throw PermissionDenied()
-        }
+        val contract = contractRepository.findByIdAndDeletedFalse(contractId)?: throw ContractNotFound()
+        if (!contract.operators.contains(getCurrentUserId()!!)) throw PermissionDenied()
         return contractMapper.toDto(contract, contractDataRepository.findAllByContract(contract))
     }
     @Async
@@ -264,11 +213,8 @@ class ContractServiceImpl(
         try {
             job.contracts.forEach { contract ->
                 val contractFile = if (contract.isGenerated) {
-                    contract.file?.let { File(it.path) }
-                        ?: throw AttachmentNotFound()
-                } else {
-                    generateDocx(contract)
-                }
+                    contract.file?.let { File(it.path) } ?: throw AttachmentNotFound()
+                } else { generateDocx(contract) }
                 files.add(contractFile)
             }
             val zipFile:File?
@@ -276,18 +222,9 @@ class ContractServiceImpl(
                 val pdfFiles = convertDocxToPdf(files)
                 zipFile = createZipFile(pdfFiles)
                 pdfFiles.forEach{it.delete()}
-            }else {
-                zipFile = createZipFile(files)
-            }
-            val zipAttachment = Attachment(
-                name = zipFile.name,
-                contentType = "application/zip",
-                size = zipFile.length(),
-                extension = "zip",
-                path = zipFile.absolutePath
-            )
+            }else { zipFile = createZipFile(files) }
+            val zipAttachment = Attachment(zipFile.name, "application/zip", zipFile.length(), "zip", zipFile.absolutePath)
             attachmentRepository.save(zipAttachment)
-
             job.attachment = zipAttachment
             job.status = JobStatus.COMPLETED
             jobRepository.save(job)
@@ -299,25 +236,15 @@ class ContractServiceImpl(
     }
     private fun generateDocx(contract: Contract): File{
         val template = contract.template
-
         val (_, uuid, path) = attachmentMapper.createDirectoryPath(subFolder = "contract")
         val tempFile = File("$path/$uuid.docx")
         tempFile.createNewFile()
 
         Files.copy(Paths.get(template.file.path), tempFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
-        val keys = contractDataRepository.findAllByContract(contract)
-            .associate { it.key.key to it.value }
+        val keys = contractDataRepository.findAllByContract(contract).associate { it.key.key to it.value }
         val replacedFile = replaceKeysWithStyles(tempFile, keys)
-
-        val newAttachment = Attachment(
-            name = replacedFile.name,
-            contentType = "application/docx",
-            size = replacedFile.length(),
-            extension = "docx",
-            path = replacedFile.absolutePath
-        )
+        val newAttachment = Attachment(replacedFile.name, "application/docx", replacedFile.length(), "docx", replacedFile.absolutePath)
         attachmentRepository.save(newAttachment)
-
         contract.file = newAttachment
         contract.isGenerated = true
         contractRepository.save(contract)
@@ -326,11 +253,9 @@ class ContractServiceImpl(
 
     private fun replaceKeysWithStyles(docxFile: File, keys: Map<String, String>): File {
         val wordDoc = XWPFDocument(Files.newInputStream(docxFile.toPath()))
-
         wordDoc.paragraphs.forEach { paragraph ->
             replaceTextInRuns(paragraph.runs, keys)
         }
-
         wordDoc.tables.forEach { table ->
             table.rows.forEach { row ->
                 row.tableCells.forEach { cell ->
@@ -340,7 +265,6 @@ class ContractServiceImpl(
                 }
             }
         }
-
         val replacedFile = File(docxFile.parentFile, "contract_${docxFile.name}")
         Files.newOutputStream(replacedFile.toPath()).use { wordDoc.write(it) }
         docxFile.delete()
@@ -349,11 +273,8 @@ class ContractServiceImpl(
 
     private fun convertDocxToPdf(files: List<File>):List<File> {
         val outputPdfPath = File("file/pdf")
-        if (!outputPdfPath.exists()) {
-            outputPdfPath.mkdirs()
-        }
-        val pdfFiles = files.map {
-                file ->
+        if (!outputPdfPath.exists()) outputPdfPath.mkdirs()
+        val pdfFiles = files.map { file ->
             val processBuilder = ProcessBuilder(
                 "libreoffice",
                 "--headless",
@@ -362,13 +283,10 @@ class ContractServiceImpl(
                 file.absolutePath
             )
             try {
-                val process =processBuilder.start()
+                val process = processBuilder.start()
                 process.waitFor()
-            } catch (e: IOException) {
-                e.printStackTrace()
-            } catch (e: InterruptedException) {
-                e.printStackTrace()
-            }
+            } catch (e: IOException) { e.printStackTrace()
+            } catch (e: InterruptedException) { e.printStackTrace()}
             File("${outputPdfPath.absolutePath}/${file.nameWithoutExtension}.pdf")
         }
         return pdfFiles
@@ -376,13 +294,9 @@ class ContractServiceImpl(
 
     fun createZipFile(files: List<File>): File {
         val zipFilePath =  "${attachmentMapper.filePath}/zip/${UUID.randomUUID()}.zip"
-
         val parentDir = File(zipFilePath).parentFile
-        if (!parentDir.exists()) {
-            parentDir.mkdirs()
-        }
+        if (!parentDir.exists()) parentDir.mkdirs()
         val zipFile = File(zipFilePath)
-
         try {
             ZipOutputStream(BufferedOutputStream(FileOutputStream(zipFile))).use { zipOut ->
                 for (file in files) {
@@ -395,10 +309,7 @@ class ContractServiceImpl(
                     }
                 }
             }
-        } catch (e: IOException) {
-            e.printStackTrace()
-        }
-
+        } catch (e: IOException) { e.printStackTrace() }
         return zipFile
     }
 
@@ -407,7 +318,7 @@ class ContractServiceImpl(
             keys.forEach { (key, value) ->
                 if (run.text().contains(key)) {
                     val fontFamily = run.fontFamily
-                    val fontSize = run.fontSize
+                    val fontSize = run.fontSizeAsDouble
                     val bold = run.isBold
                     val italic = run.isItalic
                     val color = run.color
@@ -415,9 +326,8 @@ class ContractServiceImpl(
 
                     val newText = run.text().replace(key, value)
                     run.setText(newText, 0)
-
                     run.fontFamily = fontFamily
-                    run.fontSize = fontSize
+                    run.fontSize = fontSize.toInt()
                     run.isBold = bold
                     run.isItalic = italic
                     run.color = color
@@ -427,9 +337,7 @@ class ContractServiceImpl(
         }
     }
     override fun checkDistinct(ids: List<Long>,exception: GenericException): List<Long>{
-        if (ids.distinct().size != ids.size) {
-            throw exception
-        }
+        if (ids.distinct().size != ids.size) throw exception
         return ids
     }
 }
@@ -648,9 +556,9 @@ class UserServiceImpl(
     }
 
     override fun updateOperator(request: UpdateOperatorRequest, id: Long) {
-     val user =  id.let {
+     val user =
             userRepository.findByIdAndDeletedFalse(it)?: throw  UserNotFoundException()
-        }
+
         request.passportId.let {
             if (it != null) {
                 if (userRepository.existsUserIdAndPassportId(it, id) != null) {
@@ -835,14 +743,10 @@ class AttachmentServiceImpl(
 
     override fun upload(multipartFile: MultipartFile , subFolder : String?): AttachmentInfo {
         val entity = attachmentMapper.toEntity(multipartFile, subFolder)
-        val file = File(entity.path).apply {
-            parentFile.mkdirs()
-        }.absoluteFile
+        val file = File(entity.path).apply { parentFile.mkdirs()}.absoluteFile
         try {
             multipartFile.transferTo(file)
-        } catch (e: IOException) {
-            throw RuntimeException(e)
-        }
+        } catch (e: IOException) { throw RuntimeException(e)}
         return attachmentMapper.toInfo(repository.save(entity))
     }
 
@@ -851,37 +755,25 @@ class AttachmentServiceImpl(
     override fun download(hashId: String): ResponseEntity<*> {
         val fileEntity = repository.findByHashIdAndDeletedFalse(hashId)?:throw AttachmentNotFound()
         val operator = getCurrentUserId()
-        jobRepository.findAllByAttachmentAndDeletedFalse(fileEntity)?.let {
-            if (operator?.id != it.createdBy) {
-                throw PermissionDenied()
-            }
-        }
+        jobRepository.findAllByAttachmentAndDeletedFalse(fileEntity)?.let { if (operator?.id != it.createdBy) throw PermissionDenied() }
         return fileEntity.run{
             val inputStream = FileInputStream(path)
             val resource = InputStreamResource(inputStream)
-
             ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"${name}\"")
                 .contentType(MediaType.parseMediaType(contentType))
                 .body(resource)
         }
-//        val resource = InputStreamResource(FileInputStream(fileEntity.path))
-//        return ResponseEntity.ok()
-//            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"${fileEntity.name}\"")
-//            .contentType(MediaType.APPLICATION_OCTET_STREAM)
-//            .body(resource)
     }
 
     @Throws(IOException::class)
     override fun preview(id: Long): ResponseEntity<*> {
         val fileEntity = repository.findByIdAndDeletedFalse(id)?:throw AttachmentNotFound()
-
         return fileEntity.run {
             val inputStream = FileInputStream(path)
             val resource = InputStreamResource(inputStream)
-
             ResponseEntity.ok()
-                .header("Content-Disposition", "inline; filename=\"${name}\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"${name}\"")
                 .contentType(MediaType.parseMediaType(contentType))
                 .body(resource)
         }
