@@ -98,7 +98,7 @@ class TemplateMapper(
             id = template.id,
             templateName = template.templateName,
             organizationId = template.organization.id,
-            keys = template.keys.map { KeyDto(it.id, it.key) },
+            keys = template.keys.map { KeyDto(it.id, it.key.removeSurrounding("$")) },
             attachmentId = template.file.id
         )
     }
